@@ -195,7 +195,7 @@ tsubaki sum md5 /photos | tsubaki dup
 # 第一次运行（中断）
 tsubaki sum sha256 /bigdata > partial.txt
 # 稍后继续（partial.txt 包含已计算的条目）
-cat partial.txt | tsubaki sum sha256 stdin --force-rescan > complete.txt
+cat partial.txt | tsubaki sum sha256 stdin > complete.txt
 ```
 
 ### 7. 使用 8 个线程和连续分块进行多线程处理
