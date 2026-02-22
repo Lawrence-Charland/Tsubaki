@@ -930,156 +930,55 @@ int mode_cmp()
 int mode_help()
 {
     std::cout<<R"(
-Tsubaki – a checksum utility for file integrity, comparison, and duplicate detection
+Tsubaki – checksum utility for file integrity, comparison & duplicate detection
 
-SYNOPSIS:       tsubaki <command> [options]
+USAGE: tsubaki <command> [options]
 
-DESCRIPTION:    tsubaki computes checksums of files, merges file lists, compares two
-                file hierarchies, and finds duplicates. It supports multiple hash
-                algorithms and flexible input sources.
+COMMANDS:
+  sum <type> <path> [options]   Compute checksums for files/directories.
+    <type>: md5|sha1|sha256|sha512|none
+    <path>: file, directory, "stdin" (tsubaki format) or "stdin-plain-list"
+    Options:
+      --exclude=<dir>           Exclude files under <dir> (can repeat)
+      --focus=<dir>             Only include files under <dir> (union)
+      --max-size=<size>         Skip files larger than <size> (e.g. 10M, 2G)
+      --min-size=<size>         Skip files smaller than <size>
+      --allow-symlinks          Follow symlinks
+      --test                    Dry run (no checksum calculation)
+      --quiet                   Suppress informational messages
+      --plain-list              With type=none: output only paths
+      --disable-multi-thd       Disable multi‑threading
+      --thd-amount=<N>          Set number of threads
+      --contiguous              Chunk file list contiguously for threads
+      --force-rescan            Recompute checksums even if present (stdin)
+      --buffer-size=<size>      Static buffer size (default dynamic ≤64K)
+      --max-buffer-size=<size>  Upper bound for dynamic buffer
+      -v, -vv                   Verbosity (progress bar / file names)
 
-COMMANDS
-    sum <type> <path> [options]
-        Compute checksums for files.
+  mrg <fileA> <fileB> [options] Merge two checksum lists (adds 'A '/'B ' prefix).
+    Options: --quiet
 
-        <type> is one of: md5, sha1, sha256, sha512, none.
-            With 'none', no checksum is calculated; the output is either
-            "<NONE>" (for a single file) or a list of paths (optionally
-            with "<NONE>" placeholders). Use --plain-list to output only paths.
+  cmp [options]                 Compare A/B‑prefixed lists from stdin.
+    Groups: [!] Modified, [D] Moved/copied, [U] Deleted/added, [=] Matched.
+    Options: --quiet
 
-        <path> can be:
-            • a regular file        – prints its checksum (or "<NONE>") and exits.
-            • a directory           – recursively lists all regular files,
-                                      computes checksums, and prints
-                                      "<checksum> <relative-path>" for each.
-            • "stdin"               – reads an existing list in the format
-                                      "<checksum> <path>" (lines starting with '#'
-                                      are ignored). Existing checksums are kept
-                                      while calculating (without --force-rescan).
-            • "stdin-plain-list"    – reads plain file paths (one per line) and
-                                      computes checksums for them.
+  dup [options]                 Find duplicates from stdin list (<sum> <path>).
+    Options: --quiet
 
-        Options for 'sum':
-            --exclude=<dir>             Exclude files under the given directory
-                                        (can be repeated).
-            --focus=<dir>               Only include files under the given directory
-                                        (union of repeats; applied after excludes).
-            --max-size=<size>           Skip files larger than <size>.
-                                        Examples: 10M, 2G, 1.5K.
-                                        Suffixes: K=KiB, M=MiB, G=GiB, T=TiB.
-            --min-size=<size>           Skip files smaller than <size>.
-            --allow-symlinks            Follow symbolic links (use with caution;
-                                        may cause infinite loops).
-            --test                      Do not compute checksums.
-            --quiet                     Suppress informational messages (errors still
-                                        go to stderr).
-            --plain-list                When <type> is 'none', output only file paths
-                                        (one per line) without "<NONE>" placeholders.
-            --disable-multi-thd         Disable multi‑threading (enabled by default
-                                        when total size > 1 GiB).
-            --thd-amount=<N>            Set the number of threads (default: hardware
-                                        concurrency).
-            --contiguous                When multi‑threading, split the file list into
-                                        contiguous chunks instead of interleaved.
-            --force-rescan              Recompute checksums even for files that already
-                                        have a checksum in the input list (used with
-                                        path="stdin").
-            --buffer-size=<size>        Use static buffer size=<size> (default: dynamic
-                                        buffer size<=64K)
-            --max-buffer-size=<size>    Limit maximum buffer size under <size>
-                                        (will be invalid if --buffer-size=<size> exists)
-            -v, -vv                     Verbosity level:
-                                        -v  shows a progress bar.
-                                        -vv shows the filename being processed.
+  help                          Show this help.
 
-        Output:
-            For multiple files, each line is "<checksum> <path>" (or just
-            "<path>" with --plain-list). A summary block is appended,
-            containing statistics and any error messages.
+SIZE FORMAT: optional suffix K (KiB), M (MiB), G (GiB), T (TiB); fractions allowed.
 
-        Tips:   You can use Ctrl+C (SIGINT) to pause the calculating progress, and the
-                half-finished result will be saved (to stdout) anyway.
-                Next time you can use "cat half-finished.txt | tsubaki sum <type> stdin <options>"
-                to continue your progress.
+EXIT STATUS: 0 success, 1 error.
 
-    mrg <fileA> <fileB> [options]
-        Merge two file lists (each line: "<checksum> <path>") into one list
-        with lines prefixed by 'A ' or 'B ' respectively, usually for 'cmp' mode.
+EXAMPLES:
+  tsubaki sum sha256 /home/user --exclude=.cache > sums.txt
+  cat paths.txt | tsubaki sum md5 stdin-plain-list
+  tsubaki sum none /dir --plain-list > file-list.txt
+  tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
+  tsubaki sum md5 /photos | tsubaki dup
 
-        Options:
-            --quiet                 Suppress informational messages.
-
-    cmp [options]
-        Read from stdin lines with 'A ' or 'B ' prefixes in the format:
-            A <checksum> <path>
-            B <checksum> <path>
-        (lines starting with '#' are ignored). Compare the two sets and
-        group files into the following categories:
-
-            [!] Modified          – same path, different checksum.
-            [D] Moved/copied/merged/renamed – same checksum, different paths
-                                  (grouped by checksum).
-            [U] Deleted or added  – files present only in A or only in B.
-            [=] Matched           – same path and same checksum.
-
-        Options:
-            --quiet                 Suppress informational messages.
-
-    dup [options]
-        Read from stdin a list of "<checksum> <path>" (without prefix).
-        Identify duplicate files (identical checksum) and print groups of
-        duplicates. A suggested deletion command (rm) for all but the first
-        in each group is also printed.
-
-        Options:
-            --quiet                 Suppress informational messages.
-
-    help
-        Display this help message.
-
-SIZE FORMAT
-    Size arguments for --max-size and --min-size accept an optional suffix:
-        K – KiB (1024)
-        M – MiB (1024^2)
-        G – GiB (1024^3)
-        T – TiB (1024^4)
-    If no suffix is given, the value is interpreted as bytes. Fractions are
-    allowed (e.g., 1.5K).
-
-EXIT STATUS
-    0    Success.
-    1    An error occurred (e.g., invalid argument, I/O error, or checksum
-         calculation failed for some files).
-
-EXAMPLES
-    # Compute SHA256 for all files under /home/user, excluding .config, .cache, .local
-    tsubaki sum sha256 /home/user/ \
-        --exclude=/home/user/.config \
-        --exclude=/home/user/.cache \
-        --exclude=/home/user/.local \
-        > ~/sum.txt
-
-    # Compute MD5 for each path listed in plain-filelist.txt
-    cat plain-filelist.txt | tsubaki sum md5 stdin-plain-list > ~/sum.txt
-
-    # Generate a plain list of all files under /home/user (no checksums)
-    tsubaki sum none /home/user --plain-list > ~/file-list.txt
-
-    # Compare two directories by first creating their checksum lists
-    tsubaki sum sha256 /dirA > listA.txt
-    tsubaki sum sha256 /dirB > listB.txt
-    tsubaki mrg listA.txt listB.txt | tsubaki cmp > comparison.txt
-
-    # Find duplicate files in a directory
-    tsubaki sum md5 /photos | tsubaki dup
-
-    # Reuse an existing list but force recalculation of all checksums
-    cat old_list.txt | tsubaki sum sha256 stdin --force-rescan > new_list.txt
-
-    # Use multi‑threading with contiguous chunking and 8 threads
-    tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous >~/sum.txt
-
-    Wish you a good day!
+For full documentation, see README or the original help message.
 )";
     return 0;
 }
