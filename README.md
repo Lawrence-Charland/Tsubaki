@@ -195,7 +195,7 @@ tsubaki sum md5 /photos | tsubaki dup
 # First run (interrupted)
 tsubaki sum sha256 /bigdata > partial.txt
 # Later continue (partial.txt contains already computed entries)
-cat partial.txt | tsubaki sum sha256 stdin --force-rescan > complete.txt
+cat partial.txt | tsubaki sum sha256 stdin > complete.txt
 ```
 
 ### 7. Use multi‑threading with 8 threads and contiguous chunking
