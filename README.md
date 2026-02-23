@@ -231,7 +231,7 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ## License
 
-Tsubaki is a personal project and has no copyright; you may do anything with it.
+Tsubaki is a personal project. A MIT License is attached to the project.
 
 ---
 
