@@ -238,8 +238,6 @@ Tsubaki is a personal project. A MIT License is attached to the project.
 ## Developer and Contact
 
 - **Nickname** – Lawrence Charland
-- **Primary email** – 1470595583@qq.com
-- **Backup email** – 3818604312@qq.com
 
 ## Attention
 
