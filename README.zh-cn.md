@@ -233,12 +233,10 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ## 许可证
 
-Tsubaki 是个人项目，没有任何版权，你可以对它做任何事情。
+Tsubaki 是个人项目，携带MIT开源许可证。
 
 ---
 
 ## 开发者及联系方式
 
 - **昵称** - Lawrence Charland
-- **主邮箱** - 1470595583@qq.com
-- **备用邮箱** - 3818604312@qq.com
