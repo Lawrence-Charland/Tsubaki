@@ -226,12 +226,13 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 - **Multi‑threading** – When enabled, the file list is split among threads. The default splitting is interleaved (round‑robin) to balance load; `--contiguous` splits into contiguous blocks. The latter may cause imbalance if file sizes vary widely.
 - **Signal handling** – `SIGINT` (Ctrl+C) is caught. Threads finish their current file and then exit. Already computed results are still written. If a thread is processing a very large file, it may take a while to exit; please be patient or send `SIGKILL` if necessary.
 - **Memory usage** – The file list is stored entirely in memory. For very large directory trees (millions of files), this may become a bottleneck, but typical hardware can handle it.
+- **Permission denied** – During directory traversal, any subdirectory that cannot be accessed due to insufficient permissions is silently skipped; scanning continues with other parts.
 
 ---
 
 ## License
 
-Tsubaki is a personal project. A MIT License is attached to the project.
+This project is licensed under the MIT License – see the `LICENSE` file for details.
 
 ---
 
