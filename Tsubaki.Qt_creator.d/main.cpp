@@ -24,7 +24,7 @@ struct sum_and_dir
     long long int size;
     int mark=0;
     bool mask=0;
-    void import(const std::string& line, const bool& is_classed, const int& line_id, const std::string& source)
+    void import(const std::string& line, const bool is_classed, const int line_id, const std::string& source)
     {
         if(line.length() == 0)
             throw std::runtime_error(source+": In line "+std::to_string(line_id)+": an empty line is invalid.");
@@ -209,7 +209,7 @@ struct file_list
     bool log=1;
     std::string logtag;
     //File list operations
-    file_list break_apart(const int& amount,int offset)
+    file_list break_apart(const int amount,int offset)
     {
         file_list res;
         if(cmd::find_key("--contiguous"))
@@ -313,7 +313,7 @@ struct file_list
         if(log)
             std::clog<<"-->"<<logtag<<"Found "<<file_index.size()<<" regular files in "<<dir_path<<" .\n";
     }
-    void load_files_from_stream(const bool& is_classed,const std::string& class_to_add,std::istream& input,const std::string& source)
+    void load_files_from_stream(const bool is_classed,const std::string& class_to_add,std::istream& input,const std::string& source)
     {
         if(log)
             std::clog<<"-->"<<logtag<<"Loading file list from stdin ...\n";
@@ -353,7 +353,7 @@ struct file_list
         clear_dup();
     }
     //Filtering
-    void filter_path_by_dir(const std::string& target,const bool& mode)//mode==1-->focus,mode==0->exclude
+    void filter_path_by_dir(const std::string& target,const bool mode)//mode==1-->focus,mode==0->exclude
     {
         std::vector<sum_and_dir> new_flist;
         for(int i=0;i<file_index.size();i++)
@@ -364,7 +364,7 @@ struct file_list
         }
         file_index=new_flist;
     }
-    void filter_path_by_size_limit(const long long int& size_limit,const bool& mode)//mode==0-->max,mode==1-->min
+    void filter_path_by_size_limit(const long long int size_limit,const bool mode)//mode==0-->max,mode==1-->min
     {
         std::vector<sum_and_dir> new_flist;
         for(int i=0;i<file_index.size();i++)
@@ -420,7 +420,7 @@ struct file_list
         }
     }
     //Expressions
-    void print_list_to_stream(const bool& is_classed,const bool& show_sum,std::ostream& output)
+    void print_list_to_stream(const bool is_classed,const bool show_sum,std::ostream& output)
     {
         for(int i=0;i<file_index.size();i++)
             output<<(is_classed?file_index[i].type+" ":"")<<(show_sum?file_index[i].sum+" ":"")<<file_index[i].dir<<std::endl;
@@ -443,7 +443,7 @@ struct file_list
                 file_index[i].mask=1,file_index[i].size=0,error_stack.push_back(msg.what());
             }
     }
-    long long int total_size(const bool& keep)
+    long long int total_size(const bool keep)
     {
         long long int res=0;
         for(int i=0;i<file_index.size();i++)
@@ -471,7 +471,7 @@ std::string compress_string(std::string target)
         target.resize(100, ' ');
     return target;
 }
-long long int calculate_buffer_size(const bool& dynamic_bsize,const long long int& size_limit,const long long int& target_size)
+long long int calculate_buffer_size(const bool dynamic_bsize,const long long int size_limit,const long long int target_size)
 {
     if(!dynamic_bsize)
         return size_limit;
@@ -490,7 +490,7 @@ long long int calculate_buffer_size(const bool& dynamic_bsize,const long long in
     }
 }
 template<typename Context, int DigestLength, int (*InitFunc)(Context*), int (*UpdateFunc)(Context*, const void*, size_t), int (*FinalFunc)(unsigned char*, Context*)>
-std::string compute_hash(std::ifstream &file, const std::string &file_path,const bool& dynamic_bsize, const long long int& size_limit,const long long int& target_size)
+std::string compute_hash(std::ifstream &file, const std::string &file_path,const bool dynamic_bsize, const long long int size_limit,const long long int target_size)
 {
     Context context;
     if(!InitFunc(&context))
@@ -508,7 +508,7 @@ std::string compute_hash(std::ifstream &file, const std::string &file_path,const
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
     return ss.str();
 }
-std::string calculate_file_checksum(const std::string &file_path, const std::string &checksum_type,const bool& dynamic_bsize,const long long int& size_limit,const long long int& target_size)
+std::string calculate_file_checksum(const std::string &file_path, const std::string &checksum_type,const bool dynamic_bsize,const long long int size_limit,const long long int target_size)
 {
     std::ifstream file(file_path, std::ios::binary);
     if(!file.good())
@@ -532,7 +532,7 @@ bool is_sum(std::string x)
         return 1;
     return 0;
 }
-int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const int in_detail,const bool& dynamic_bsize,const long long int& size_limit,const bool& keep,const int& ID)
+int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const int in_detail,const bool dynamic_bsize,const long long int size_limit,const bool keep,const int ID)
 {
     if(!is_sum(sum_type))
     {
