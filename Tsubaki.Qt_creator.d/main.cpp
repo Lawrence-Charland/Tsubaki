@@ -16,7 +16,6 @@
 #include <cmath>
 #include <cctype>
 #include <thread>
-#include <mutex>
 #include <signal.h>
 #include <atomic>
 struct sum_and_dir
@@ -25,7 +24,7 @@ struct sum_and_dir
     long long int size;
     int mark=0;
     bool mask=0;
-    void import(const std::string line, const bool is_classed, const int line_id, const std::string source)
+    void import(const std::string& line, const bool& is_classed, const int& line_id, const std::string& source)
     {
         if(line.length() == 0)
             throw std::runtime_error(source+": In line "+std::to_string(line_id)+": an empty line is invalid.");
@@ -61,7 +60,7 @@ namespace cmd
 struct key_value_pair
 {
     std::string key="",value="";
-    void import(const std::string argument)
+    void import(const std::string& argument)
     {
         int i=0;
         key="";
@@ -84,7 +83,7 @@ void init(int init_argc,char** init_argv)
         args.push_back(arg);
     }
 }
-bool find_key(const std::string target)
+bool find_key(const std::string& target)
 {
     key_value_pair arg;
     for(int i=0;i<args.size();i++)
@@ -102,7 +101,7 @@ int verbose()
         return 1;
     return 0;
 }
-std::vector<std::string> get_arr(const std::string target_key)
+std::vector<std::string> get_arr(const std::string& target_key)
 {
     std::vector<std::string> arr;
     for(int i=0;i<args.size();i++)
@@ -129,18 +128,18 @@ int get_thd_amount()
 }
 namespace cmp
 {
-bool cmp_by_sum(sum_and_dir A, sum_and_dir B)
+bool cmp_by_sum(const sum_and_dir& A,const sum_and_dir& B)
 {
     return A.sum < B.sum;
 }
-bool cmp_by_dir(sum_and_dir A, sum_and_dir B)
+bool cmp_by_dir(const sum_and_dir& A,const sum_and_dir& B)
 {
     return A.dir < B.dir;
 }
 }
 namespace file
 {
-bool B_is_As_subpath(const std::string A_str, const std::string B_str)
+bool B_is_As_subpath(const std::string& A_str, const std::string& B_str)
 {
     std::filesystem::path A(A_str),B(B_str);
     auto rel = B.lexically_relative(A);
@@ -191,7 +190,7 @@ long long int str_to_size(const std::string& input)//This function was helped by
         throw std::runtime_error("Invalid size.\n");
     return static_cast<long long>(std::llround(value * multiplier));
 }
-long long int get_file_size(const std::string file_path)
+long long int get_file_size(const std::string& file_path)
 {
     try
     {
@@ -210,7 +209,7 @@ struct file_list
     bool log=1;
     std::string logtag;
     //File list operations
-    file_list break_apart(const int amount,int offset)
+    file_list break_apart(const int& amount,int offset)
     {
         file_list res;
         if(cmd::find_key("--contiguous"))
@@ -249,6 +248,14 @@ struct file_list
                 new_flist.push_back(file_index[i]);
         file_index=new_flist;
     }
+    void clear_masked()
+    {
+        std::vector<sum_and_dir> new_flist;
+        for(int i=0;i<file_index.size();i++)
+            if(!file_index[i].mask)
+                new_flist.push_back(file_index[i]);
+        file_index=new_flist;
+    }
     void clear_dup()
     {
         if(file_index.empty())
@@ -263,14 +270,14 @@ struct file_list
                 new_flist.push_back(file_index[i]);
         file_index=new_flist;
     }
-    void merge_with(const file_list target)//ignoring sum and type
+    void merge_with(const file_list& target)//ignoring sum and type
     {
         file_index.insert(file_index.end(),target.file_index.begin(),target.file_index.end());
         error_stack.insert(error_stack.end(),target.error_stack.begin(),target.error_stack.end());
         clear_dup();
     }
     //Loading
-    void load_files_from_dir(const std::string &dir_path)//This function was helped by DeepSeek
+    void load_files_from_dir(const std::string& dir_path)//This function was helped by DeepSeek
     {
         if(log)
             std::clog<<"-->"<<logtag<<"Searching for regular files in "<<dir_path<<" ...\n";
@@ -300,13 +307,13 @@ struct file_list
         }
         catch (const std::filesystem::filesystem_error& msg)
         {
-            std::cerr << "==>"<<logtag<<"Error: Filesystem error while traversing " << dir_path << ": " << msg.what() << std::endl;
+            throw std::runtime_error("Fatal: Filesystem error while traversing "+dir_path+": "+msg.what());
         }
         clear_dup();
         if(log)
             std::clog<<"-->"<<logtag<<"Found "<<file_index.size()<<" regular files in "<<dir_path<<" .\n";
     }
-    void load_files_from_stream(const bool is_classed,const std::string class_to_add,std::istream& input,const std::string source)
+    void load_files_from_stream(const bool& is_classed,const std::string& class_to_add,std::istream& input,const std::string& source)
     {
         if(log)
             std::clog<<"-->"<<logtag<<"Loading file list from stdin ...\n";
@@ -346,7 +353,7 @@ struct file_list
         clear_dup();
     }
     //Filtering
-    void filter_path_by_dir(const std::string target,const bool mode)//mode==1-->focus,mode==0->exclude
+    void filter_path_by_dir(const std::string& target,const bool& mode)//mode==1-->focus,mode==0->exclude
     {
         std::vector<sum_and_dir> new_flist;
         for(int i=0;i<file_index.size();i++)
@@ -357,7 +364,7 @@ struct file_list
         }
         file_index=new_flist;
     }
-    void filter_path_by_size_limit(const long long int size_limit,const bool mode)//mode==0-->max,mode==1-->min
+    void filter_path_by_size_limit(const long long int& size_limit,const bool& mode)//mode==0-->max,mode==1-->min
     {
         std::vector<sum_and_dir> new_flist;
         for(int i=0;i<file_index.size();i++)
@@ -370,6 +377,7 @@ struct file_list
     }
     void filter_by_args()
     {
+        clear_masked();
         std::vector<std::string> excludings=cmd::get_arr("--exclude"),focusings=cmd::get_arr("--focus");
         int tmpsize;
         for(int i=0;i<excludings.size();i++)//--exclude
@@ -412,7 +420,7 @@ struct file_list
         }
     }
     //Expressions
-    void print_list_to_stream(const bool is_classed,const bool show_sum,std::ostream& output)
+    void print_list_to_stream(const bool& is_classed,const bool& show_sum,std::ostream& output)
     {
         for(int i=0;i<file_index.size();i++)
             output<<(is_classed?file_index[i].type+" ":"")<<(show_sum?file_index[i].sum+" ":"")<<file_index[i].dir<<std::endl;
@@ -432,10 +440,10 @@ struct file_list
             }
             catch(const std::exception& msg)
             {
-                file_index[i].mask=1,error_stack.push_back(msg.what());
+                file_index[i].mask=1,file_index[i].size=0,error_stack.push_back(msg.what());
             }
     }
-    long long int total_size(const bool keep)
+    long long int total_size(const bool& keep)
     {
         long long int res=0;
         for(int i=0;i<file_index.size();i++)
@@ -452,7 +460,6 @@ namespace sum
 {
 std::atomic<bool> kill_flag{0};
 std::atomic<int> processed{0},kept{0};
-std::mutex sum_mtx;
 std::string compress_string(std::string target)
 {
     if (target.length() > 100)
@@ -525,7 +532,7 @@ bool is_sum(std::string x)
         return 1;
     return 0;
 }
-int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const int in_detail,const bool& dynamic_bsize,const long long int& size_limit,const bool keep,const int ID)
+int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const int in_detail,const bool& dynamic_bsize,const long long int& size_limit,const bool& keep,const int& ID)
 {
     if(!is_sum(sum_type))
     {
@@ -643,11 +650,11 @@ int mode_sum(int argc, char** argv)
             std::clog <<std::endl<<"-->SUM: "<< std::string(argv[3]) << " is a regular file." << std::endl << "Calculating " << std::string(argv[2]) << " checksum of this file..." << std::endl;
         try
         {
-            std::cout << sum::calculate_file_checksum(std::string(argv[3]), std::string(argv[2]),0,16LL*1024,0) << std::endl;
+            std::cout << sum::calculate_file_checksum(std::string(argv[3]),std::string(argv[2]),0,16LL*1024,0)<<' '<<std::string(argv[3])<< std::endl;
         }
         catch(const std::exception& msg)
         {
-            std::cerr<<"Error: "<<msg.what()<<std::endl;
+            std::cerr<<"==>SUM: Error: "<<msg.what()<<std::endl;
             return 1;
         }
         return 0;
