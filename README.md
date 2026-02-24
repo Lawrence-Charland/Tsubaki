@@ -247,7 +247,7 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ---
 
-##Code Architecture##
+##Code Architecture
 
 This project consists of a single source code file, and the source code structure is described in `ARCHITECTURE.md` (English) and `ARCHITECTURE.zh-cn.md` (Chinese).
 
