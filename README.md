@@ -1,8 +1,18 @@
-### 注意：以下展示的是README的英文翻译版。若需阅读中文请移步至项目文件夹下的README.zh_cn.md。
+### 注意
+
+以下展示的是README的英文翻译版。若需阅读中文请移步至项目文件夹下的 `README.zh-cn.md` 。
+
+### Attention
+
+This README was translated by AI from the Chinese version. If there are any errors, please refer to the Chinese version or the source code.
+
+---
 
 This is a personal practice project, and also the first project I've created since I started coding. You are welcome to use it. **I am not a professional developer**, so the code may reveal some of my inexperience, and I hope you can understand. This project is reasonably robust, but not production‑ready. **Feel free to play with it as a toy.**
 
 Due to my limited knowledge, this project **supports only Linux distributions**. Without further ado, the help information is as follows:
+
+---
 
 # Tsubaki
 
@@ -19,7 +29,7 @@ Tsubaki is a checksum utility for verifying file integrity, comparing directorie
 - **Dynamic buffer** – Adjusts the I/O buffer size based on file size for better efficiency.
 - **Graceful interruption** – Press Ctrl+C to stop processing; already computed results are still written to stdout.
 
-## Building
+## Building Requirements
 
 Tsubaki requires a C++17 compiler, the OpenSSL development libraries, and pthreads (on Unix-like systems).
 
@@ -34,10 +44,16 @@ Tsubaki requires a C++17 compiler, the OpenSSL development libraries, and pthrea
 ### Compile
 
 ```bash
-g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread
+g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread #You can also add other parameters or switch a compiler
 ```
 
 On some systems you might need to add `-lstdc++fs`. If your compiler fully supports C++17 with integrated `std::filesystem`, the extra library is not required.
+
+You can also directly run the `build` script in the project folder (root privileges are required).
+
+####Attention
+
+It is recommended to verify the SHA256 checksums of all files (at a minimum, the **source code**) before compilation, and compare them with the contents of `Checksum.sha256.txt` in the project directory.
 
 ## Usage
 
@@ -50,7 +66,7 @@ Commands: `sum`, `mrg`, `cmp`, `dup`, `help`
 ### Global Options
 
 - `--quiet` – Suppress informational messages (errors still go to stderr).
-- `-v`, `-vv` – Increase verbosity (only effective in `sum` mode).  
+- `-v`, `-vv` – Increase verbosity (only effective in `sum` mode).
   `-v` shows a progress bar; `-vv` shows the current file name.
 
 ---
@@ -61,7 +77,7 @@ Commands: `sum`, `mrg`, `cmp`, `dup`, `help`
 
 Compute checksums for files.
 
-**`<type>`** – one of: `md5`, `sha1`, `sha256`, `sha512`, `none`.  
+**`<type>`** – one of: `md5`, `sha1`, `sha256`, `sha512`, `none`.
 With `none` no checksum is calculated; the output is a list of paths (optionally with `<NONE>` placeholders). Use `--plain-list` to output only paths.
 
 **`<path>`** can be:
@@ -74,7 +90,7 @@ With `none` no checksum is calculated; the output is a list of paths (optionally
 
 | Option | Description |
 |--------|-------------|
-| `--exclude=<dir>` | Exclude files under the given directory (can be repeated, intersection). |
+| `--exclude=<dir>` | Exclude files under the given directory (can be repeated, union). |
 | `--focus=<dir>`   | Only include files under the given directory (union if repeated); applied after excludes. |
 | `--max-size=<size>` | Skip files larger than `<size>`. Examples: `10M`, `2G`, `1.5K`. Suffixes: `K`=KiB, `M`=MiB, `G`=GiB, `T`=TiB. |
 | `--min-size=<size>` | Skip files smaller than `<size>`. |
@@ -212,7 +228,7 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 ## Exit Status
 
 - **0** – Success (all files processed, and no errors occurred).
-- **1** – An error occurred (invalid arguments, I/O error, or at least one checksum calculation failed).  
+- **1** – An error occurred (invalid arguments, I/O error, or at least one checksum calculation failed).
   In `sum` mode, if any file could not be read or its hash could not be computed, error messages are appended to the output and the program returns `1`.
   (Errors during file list loading are printed immediately and do not affect the exit status.)
 
@@ -220,13 +236,20 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ## Notes
 
-- **Directory scanning** – When scanning a directory, only regular files and symbolic links pointing to regular files are included. If you want to exclude such symlinks, you can add a filter like `--focus=/target_dir` (where `/target_dir` is the directory to be verified).
-- **Symbolic links** – By default they are not followed. Use `--allow-symlinks` to follow them, but beware of cyclic links.
-- **File size filtering** – Sizes are checked **after** loading the file list. For directories, this means all files are first enumerated, then filtered. For large directories with many files, this can consume memory.
-- **Multi‑threading** – When enabled, the file list is split among threads. The default splitting is interleaved (round‑robin) to balance load; `--contiguous` splits into contiguous blocks. The latter may cause imbalance if file sizes vary widely.
-- **Signal handling** – `SIGINT` (Ctrl+C) is caught. Threads finish their current file and then exit. Already computed results are still written. If a thread is processing a very large file, it may take a while to exit; please be patient or send `SIGKILL` if necessary.
-- **Memory usage** – The file list is stored entirely in memory. For very large directory trees (millions of files), this may become a bottleneck, but typical hardware can handle it.
-- **Permission denied** – During directory traversal, any subdirectory that cannot be accessed due to insufficient permissions is silently skipped; scanning continues with other parts.
+- **Directory Scanning** – Scans only regular files and symlinks pointing to regular files. To exclude symlinks, add `--focus=/target_dir`.
+- **Permission Denied** – Subdirectories without read permission are silently skipped.
+- **Absolute Paths** – Only absolute paths are supported; input and output use absolute paths.
+- **Symbolic Links** – Directory symlinks are not followed by default. Use `--allow-symlinks` to follow (beware of cycles).
+- **Multithreading** – File list is distributed among threads. Default interleaving balances load; `--contiguous` splits into blocks (may cause imbalance if file sizes vary).
+- **Signal Handling** – `SIGINT` (Ctrl+C) is caught; threads exit after current file. Results are saved. For large files, exit may be delayed; use `SIGKILL` if needed.
+- **Memory Usage** – File list is fully enumerated in memory before filtering. May be a bottleneck for millions of files, but typically manageable.
+- **System Support** – Linux only (due to author's limitations).
+
+---
+
+##Code Architecture##
+
+This project consists of a single source code file, and the source code structure is described in `ARCHITECTURE.md` (English) and `ARCHITECTURE.zh-cn.md` (Chinese).
 
 ---
 
@@ -239,7 +262,3 @@ This project is licensed under the MIT License – see the `LICENSE` file for de
 ## Developer and Contact
 
 - **Nickname** – Lawrence Charland
-
-## Attention
-
-This README was translated by AI from the Chinese version. If there are any errors, please refer to the Chinese version or the source code.

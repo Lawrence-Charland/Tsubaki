@@ -961,7 +961,7 @@ int mode_cmp()
 int mode_help()
 {
     std::cout<<R"(
-Tsubaki – checksum utility for file integrity, comparison & duplicate detection
+Tsubaki v1.0 – checksum utility for file integrity, comparison & duplicate detection
 
 USAGE: tsubaki <command> [options]
 
@@ -972,7 +972,7 @@ COMMANDS:
     Options:
       --exclude=<dir>           Exclude files under <dir> (can repeat)
       --focus=<dir>             Only include files under <dir> (union)
-      --max-size=<size>         Skip files larger than <size> (e.g. 10M, 2G)
+      --max-size=<size>         Skip files larger than <size> (e.g. 1.5M, 2G)
       --min-size=<size>         Skip files smaller than <size>
       --allow-symlinks          Follow symlinks
       --test                    Dry run (no checksum calculation)
@@ -998,18 +998,16 @@ COMMANDS:
 
   help                          Show this help.
 
-SIZE FORMAT: optional suffix K (KiB), M (MiB), G (GiB), T (TiB); fractions allowed.
-
 EXIT STATUS: 0 success, 1 error.
 
 EXAMPLES:
-  tsubaki sum sha256 /home/user --exclude=.cache > sums.txt
+  tsubaki sum sha256 /home/user --exclude=/home/usr/.cache > sums.txt
   cat paths.txt | tsubaki sum md5 stdin-plain-list
   tsubaki sum none /dir --plain-list > file-list.txt
   tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
   tsubaki sum md5 /photos | tsubaki dup
 
-For full documentation, see README or the original help message.
+For full documentation, see README.md in English or README.zh-cn.md in Simplified Chinese.
 )";
     return 0;
 }
