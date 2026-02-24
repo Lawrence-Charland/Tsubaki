@@ -240,7 +240,7 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ---
 
-##源码结构
+## 源码结构
 
 本项目为单源代码文件，源码结构写在 `ARCHITECTURE.md`（英文）和 `ARCHITECTURE.zh-cn.md`（中文）中。
 
