@@ -44,7 +44,7 @@ g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread #你也可以添
 
 你也可以直接运行项目文件夹下的 `build` 脚本（需要root权限）。
 
-####注意
+#### 注意
 
 建议在编译前先检查各文件（至少要检查**源代码**）的SHA256校验和，并与项目文件夹下的 `Checksum.sha256.txt` 的内容比对。
 
@@ -252,6 +252,6 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 
 ---
 
-## 开发者及联系方式
+## 开发者
 
 - **昵称** - Lawrence Charland

@@ -51,7 +51,7 @@ On some systems you might need to add `-lstdc++fs`. If your compiler fully suppo
 
 You can also directly run the `build` script in the project folder (root privileges are required).
 
-####Attention
+#### Attention
 
 It is recommended to verify the SHA256 checksums of all files (at a minimum, the **source code**) before compilation, and compare them with the contents of `Checksum.sha256.txt` in the project directory.
 
@@ -259,6 +259,6 @@ This project is licensed under the MIT License – see the `LICENSE` file for de
 
 ---
 
-## Developer and Contact
+## Developer
 
 - **Nickname** – Lawrence Charland
