@@ -8,9 +8,9 @@ This README was translated by AI from the Chinese version. If there are any erro
 
 ---
 
-This is a personal practice project, and also the first project I've created since I started coding. You are welcome to use it. **I am not a professional developer**, so the code may reveal some of my inexperience, and I hope you can understand. This project is reasonably robust, but not production‑ready. **Feel free to play with it as a toy.**
+This is a personal practice project, and it is also the first project I have created since I began exploring development-oriented programming. You are welcome to use it, and any feedback or suggestions regarding any issues would be greatly appreciated.
 
-Due to my limited knowledge, this project **supports only Linux distributions**. Without further ado, the help information is as follows:
+*Note: If you intend to make any changes to the repository, please inform me in advance.*
 
 ---
 
