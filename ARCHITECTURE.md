@@ -41,7 +41,7 @@ Each subcommand's handler function generally follows these steps:
 6. Return an appropriate exit code based on whether errors occurred.
 
 ### 4. Multithreading and Error Handling
-- **Multithreaded computation**: `sum::calculate_dir_checksum` is called in parallel by multiple threads. Each thread processes a slice of the `file_list`, with the slicing strategy controlled by the `--contiguous` option. Atomic variables track the number of processed files and an interrupt flag, allowing safe termination with Ctrl+C.
+- **Multithreaded computation**: `sum::calculate_dir_checksum` is called in parallel by multiple threads. Each thread processes a slice of the `file_list`, and you can decide whether sort the flie by size before silcing by using `--balance` . Atomic variables track the number of processed files and an interrupt flag, allowing safe termination with Ctrl+C.
 - **Error handling**: For non-fatal errors (e.g., file cannot be opened, invalid checksum format), the program stores the error message in `file_list::error_stack` and continues execution. The exit status is determined by whether the error stack is empty at the end. Fatal errors throw exceptions, which are caught by `main` and terminate the program.
 
 ### 5. Key Design Points

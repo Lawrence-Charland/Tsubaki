@@ -54,28 +54,26 @@ g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread #你也可以添
 tsubaki <command> [options]
 ```
 
-命令：`sum`, `mrg`, `cmp`, `dup`, `help`
+命令：`sum`, `cmp`, `dup`, `help`
 
 ### 全局选项
 
 - `--quiet` – 禁止信息性消息（错误仍会输出到 stderr）。
-- `-v`, `-vv` – 增加详细程度（仅对 `sum` 模式有效）。
-  `-v` 显示进度条；`-vv` 显示当前正在处理的文件名。
 
 ---
 
 ## 命令语法
 
-### `sum <type> <path> [options]`
+### `sum <type> [paths] [options]`
 
 计算文件的校验和。
 
 **`<type>`** – 可选值：`md5`、`sha1`、`sha256`、`sha512`、`none`。
 使用 `none` 时不计算校验和；输出为路径列表（可选择包含 `<NONE>` 占位符）。使用 `--plain-list` 仅输出路径。
 
-**`<path>`** 可以是：
+**`[paths]`** 可以是：
 - **普通文件** – 打印其校验和（或 `<NONE>`）并退出。
-- **目录** – 递归列出所有普通文件，计算校验和，并为每个文件输出 `<checksum> <relative-path>`。
+- **目录** – 递归扫描目录中所有普通文件，计算校验和，并为每个文件输出 `<checksum> <relative-path>`。允许指定多个目录**（详见“提示”部分）**。
 - **`"stdin"`** – 读取现有列表，格式为 `<checksum> <path>`（以 `#` 开头的行将被忽略）。保留已有的校验和（除非使用 `--force-rescan`）以避免重新计算。
 - **`"stdin-plain-list"`** – 读取纯文件路径（每行一个）并为其计算校验和。
 
@@ -90,12 +88,12 @@ tsubaki <command> [options]
 | `--allow-symlinks` | 跟随符号链接（谨慎使用；可能导致无限循环）。 |
 | `--test`          | 不计算校验和——仅计算文件过滤规则、缓冲区策略、线程分配策略，同时预告总文件数目和大小。 |
 | `--plain-list`    | 当 `<type>` 为 `none` 时，仅输出文件路径（每行一个），不包含 `<NONE>` 占位符。 |
-| `--disable-multi-thd` | 禁用多线程。当总大小 <= 1 GiB 时总是禁用多线程。 |
-| `--thd-amount=<N>` | 设置线程数。默认：硬件并发数。 |
-| `--contiguous`    | 多线程时，将每个线程的子文件列表划分为连续块，而不是交错分配。 |
+| `--thd-amount=<N>` | 设置线程数。未指定或键值无效时使用硬件并发数（待处理大小>1G）或1。 |
+| `--balance`       | 在多线程时先按文件大小排序再交错分配，使各线程处理的总数据量更均衡（有助于节省时间）。 |
 | `--force-rescan`  | 即使输入列表中的文件已有校验和，也重新计算，与 `path="stdin"` 一起使用。 |
 | `--buffer-size=<size>` | 使用静态缓冲区，大小精确为 `<size>` 字节。默认使用动态缓冲区（2KB ~ 64KB）。 |
 | `--max-buffer-size=<size>` | 使用动态大小时限制最大缓冲区大小，若设置了 `--buffer-size` 则忽略此选项。 |
+| `-v` | 增加详细程度，显示正在处理的文件名和已处理的文件总数。 |
 
 #### 输出
 
@@ -122,33 +120,25 @@ tsubaki <command> [options]
 #### 提示
 
 - 按 **Ctrl+C** 可优雅地停止计算。已处理的结果仍会写入标准输出。之后可以通过将半成品输出重新输入来继续，实现**断点续算**：`cat half.txt | tsubaki sum <type> stdin`。
-- 将 `--plain-list` 与 `none` 结合使用，可生成用于备份的简单文件列表。
+- 将 `--plain-list` 与 `none` 结合使用，可生成简单文件列表。
+- 对于递归扫描目录，`tsubaki sum <type> <dir1>` 后面的所有参数的顺序不敏感，这意味着您可以这样输入：
+
+```bash
+tsubaki sum md5 /home/user -v --balance --exclude=/home/user/{.cache,.config} /data #注意： <type>后面必须紧跟第一个待扫描目录，方便本程序识别扫描策略。
+```
 
 ---
 
-### `mrg <fileA> <fileB> [options]`
+### `cmp <fileA> <fileB> [options]`
 
-合并两个现有的校验和列表（每行格式：`<checksum> <path>`）为一个列表，每行添加 `A ` 或 `B ` 前缀。结果打印到标准输出，基本只会用作 `cmp` 的输入。
-
-**选项：** `--quiet` 禁止信息性消息。
-
----
-
-### `cmp [options]`
-
-从标准输入读取带有 `A ` 或 `B ` 前缀的行（一般是`mrg`模式的输出），格式如下：
-```
-A <checksum> <path>
-B <checksum> <path>
-```
-（以 `#` 开头的行将被忽略）。比较两组文件并将其分类：
+比较两个校验和文件（每行格式：`<checksum> <path>`）。程序会逐行读取两个文件，并根据以下规则将文件分类：
 
 - **[!] 已修改** – 路径相同，校验和不同。
 - **[D] 已移动/复制/合并/重命名** – 校验和相同，路径不同（按校验和分组）。
 - **[U] 已删除或添加** – 仅出现在 A 或仅出现在 B 中的文件。
 - **[=] 匹配** – 路径和校验和均相同。
 
-输出打印到标准输出。  
+输出打印到标准输出。
 **选项：** `--quiet` 禁止信息性消息。
 
 ---
@@ -169,10 +159,10 @@ B <checksum> <path>
 
 ## 示例
 
-### 1. 计算 `/home/user` 下所有文件的 SHA256，排除缓存和配置目录
+### 1. 计算 `/home/user` 和 `/data` 下所有文件的 SHA256，排除缓存和配置目录
 
 ```bash
-tsubaki sum sha256 /home/user --exclude=/home/user/{.cache,.config} > home_checksums.txt
+tsubaki sum sha256 /home/user /data --exclude=/home/user/{.cache,.config} > home_checksums.txt
 ```
 
 ### 2. 生成 `/photos` 中所有文件的纯路径列表（无校验和）
@@ -192,7 +182,7 @@ cat filelist.txt | tsubaki sum md5 stdin-plain-list > file_checksums.txt
 ```bash
 tsubaki sum sha256 /dirA > A.txt
 tsubaki sum sha256 /dirB > B.txt
-tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
+tsubaki cmp A.txt B.txt > comparison.txt
 ```
 
 ### 5. 查找照片集中的重复文件
@@ -210,10 +200,10 @@ tsubaki sum sha256 /large_data > partial.txt
 cat partial.txt | tsubaki sum sha256 stdin > complete.txt
 ```
 
-### 7. 使用 8 个线程和连续分块进行多线程处理
+### 7. 使用 8 个线程和负载均衡进行多线程处理
 
 ```bash
-tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
+tsubaki sum sha256 /large_dir --thd-amount=8 --balance > sums.txt
 ```
 
 ---
@@ -232,7 +222,7 @@ tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
 - **权限拒绝** – 遍历目录时，遇到因权限不足无法访问的子目录会静默跳过，继续扫描其他部分。
 - **绝对路径** - 目前仅支持绝对路径，也就是说你需要使用绝对路径指定文件，程序也总是会输出绝对路径。
 - **符号链接** – 默认不跟随目录的符号链接。使用 `--allow-symlinks` 可跟随，但需注意循环链接的风险。
-- **多线程** – 启用时，文件列表会在线程间分配。默认分配方式是交错（轮询）以平衡负载；`--contiguous` 则划分为连续块。后者在文件大小差异较大时可能导致负载不均衡。
+- **多线程** – 启用时，文件列表会在线程间分配。默认分配方式是交错（轮询）以平衡负载；`--balance` 则先按文件大小排序再交错分配，使各线程处理的总数据量更均衡。
 - **信号处理** – 递归计算目录时，会捕获 `SIGINT`（ `Ctrl+C` ）。线程完成当前文件后退出，已计算的结果仍会写入。如果某个线程正在计算较大的文件，则可能需要等很久才会退出，请耐心等待或发送 `SIGKILL` 。
 - **内存使用** – 文件列表会先完全枚举在内存中，然后根据指定的筛选条件进行过滤。对于非常大的目录树（数百万个文件），这可能成为瓶颈 ，但一般硬件可以承担。
 - **系统支持** - 限于本人水平，仅支持Linux发行版。

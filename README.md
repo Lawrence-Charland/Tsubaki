@@ -8,30 +8,33 @@ This README was translated by AI from the Chinese version. If there are any erro
 
 ---
 
-This is a personal practice project, and it is also the first project I have created since I began exploring development-oriented programming. You are welcome to use it, and any feedback or suggestions regarding any issues would be greatly appreciated.
+This is a personal practice project, and also the first project I created since I started programming. You are welcome to use it. If you find any issues, feel free to let me know.
 
-*Note: If you intend to make any changes to the repository, please inform me in advance.*
+*Note: If you want to make any modifications to the repository, please inform me first.*
+
+Here is the tool introduction:
 
 ---
 
+
 # Tsubaki
 
-Tsubaki is a checksum utility for verifying file integrity, comparing directories, and detecting duplicates. It supports multiple hash algorithms (MD5, SHA1, SHA256, SHA512) and offers flexible input sources – directories, file lists, or plain path lists. Multi‑threaded processing and dynamic buffer sizing make it suitable for large data sets.
+Tsubaki is a checksum utility for verifying file integrity, comparing directories, and detecting duplicate files. It supports multiple hash algorithms (MD5, SHA1, SHA256, SHA512) and provides flexible input sources—directories, file lists, or plain path lists—as well as single-file checksum calculation. Multi-threading and dynamic buffer sizing make it suitable for large datasets.
 
 ## Features
 
-- **Sum mode** – Recursively compute checksums for all files in a directory, or for a file list read from standard input.
-- **Duplicate mode** – Identify duplicate files based on identical checksums and suggest a deletion command.
-- **Compare mode** – Read and compare two checksum lists, classifying files as modified, moved/copied, added/deleted, or matched.
-- **Multi‑threading** – Automatically enabled for large workloads (total size > 1 GB); thread count and chunking strategy are configurable.
-- **Flexible filtering** – Include or exclude subtrees, filter by file size, optionally follow symbolic links to directories.
-- **Progress reporting** – Verbose modes show a progress bar or the current file being processed.
-- **Dynamic buffer** – Adjusts the I/O buffer size based on file size for better efficiency.
-- **Graceful interruption** – Press Ctrl+C to stop processing; already computed results are still written to stdout.
+- **Sum Mode** – Recursively compute checksums for all files in a directory, supporting direct directory scanning or reading a file list from standard input for calculation.
+- **Deduplication Mode** – Identify duplicate files based on identical checksums, with a suggested deletion command.
+- **Comparison Mode** – Read and compare two checksum results, categorizing files as modified, moved/copied, added/deleted, or matched.
+- **Multi-threading Acceleration** – Automatically enabled for large tasks (directory calculation with total size > 1GB) to fully utilize hardware performance; configurable thread count and chunking strategy.
+- **Flexible Filtering** – Focus on or exclude subdirectories, filter by file size, and allow following symbolic links.
+- **Progress Reporting** – Verbose mode shows a progress bar or the currently processed file name.
+- **Dynamic Buffer** – Automatically adjusts buffer size based on file size to maximize efficiency.
+- **Graceful Interruption** – Press Ctrl+C to stop processing; already computed results are still written to stdout.
 
-## Building Requirements
+## Build Requirements
 
-Tsubaki requires a C++17 compiler, the OpenSSL development libraries, and pthreads (on Unix-like systems).
+Tsubaki requires a C++17 compiler, OpenSSL development libraries, and pthreads (on Unix-like systems).
 
 ### Dependencies
 
@@ -41,19 +44,19 @@ Tsubaki requires a C++17 compiler, the OpenSSL development libraries, and pthrea
 - POSIX threads
 - `filesystem` (part of C++17; on older compilers you may need `-lstdc++fs`)
 
-### Compile
+### Compilation
 
 ```bash
-g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread #You can also add other parameters or switch a compiler
+g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread # You can add other parameters or change the compiler
 ```
 
-On some systems you might need to add `-lstdc++fs`. If your compiler fully supports C++17 with integrated `std::filesystem`, the extra library is not required.
+On some systems, you might need to add `-lstdc++fs`. If your compiler fully supports C++17 with integrated `std::filesystem`, no extra library is needed.
 
-You can also directly run the `build` script in the project folder (root privileges are required).
+You can also directly run the `build` script in the project folder (requires root privileges).
 
-#### Attention
+#### Note
 
-It is recommended to verify the SHA256 checksums of all files (at a minimum, the **source code**) before compilation, and compare them with the contents of `Checksum.sha256.txt` in the project directory.
+It is recommended to check the SHA256 checksum of each file (at least the **source code**) before compilation, and compare it with the content of `Checksum.sha256.txt` in the project folder.
 
 ## Usage
 
@@ -61,52 +64,50 @@ It is recommended to verify the SHA256 checksums of all files (at a minimum, the
 tsubaki <command> [options]
 ```
 
-Commands: `sum`, `mrg`, `cmp`, `dup`, `help`
+Commands: `sum`, `cmp`, `dup`, `help`
 
 ### Global Options
 
-- `--quiet` – Suppress informational messages (errors still go to stderr).
-- `-v`, `-vv` – Increase verbosity (only effective in `sum` mode).
-  `-v` shows a progress bar; `-vv` shows the current file name.
+- `--quiet` – Suppress informational messages (errors are still printed to stderr).
 
 ---
 
 ## Command Syntax
 
-### `sum <type> <path> [options]`
+### `sum <type> [paths] [options]`
 
 Compute checksums for files.
 
-**`<type>`** – one of: `md5`, `sha1`, `sha256`, `sha512`, `none`.
-With `none` no checksum is calculated; the output is a list of paths (optionally with `<NONE>` placeholders). Use `--plain-list` to output only paths.
+**`<type>`** – Supported values: `md5`, `sha1`, `sha256`, `sha512`, `none`.
+When using `none`, no checksum is computed; output is a list of paths (optionally with a `<NONE>` placeholder). Use `--plain-list` to output only paths.
 
-**`<path>`** can be:
-- a **regular file** – prints its checksum (or `<NONE>`) and exits.
-- a **directory** – recursively lists all regular files, computes checksums, and outputs `<checksum> <relative-path>` for each.
-- **`"stdin"`** – reads an existing list in the format `<checksum> <path>` (lines starting with `#` are ignored). Existing checksums are kept (unless `--force-rescan` is used) to avoid recomputation.
-- **`"stdin-plain-list"`** – reads plain file paths (one per line) and computes checksums for them.
+**`[paths]`** can be:
+- **Regular file** – Print its checksum (or `<NONE>`) and exit.
+- **Directory** – Recursively scan all regular files in the directory, compute checksums, and output `<checksum> <relative-path>` for each file. Multiple directories can be specified **(see “Tips” section)**.
+- **`"stdin"`** – Read an existing list in the format `<checksum> <path>` (lines starting with `#` are ignored). Existing checksums are retained (unless `--force-rescan` is used) to avoid recomputation.
+- **`"stdin-plain-list"`** – Read plain file paths (one per line) and compute checksums for them.
 
 #### Options for `sum`
 
 | Option | Description |
 |--------|-------------|
-| `--exclude=<dir>` | Exclude files under the given directory (can be repeated, union). |
-| `--focus=<dir>`   | Only include files under the given directory (union if repeated); applied after excludes. |
+| `--exclude=<dir>` | Exclude files under the specified directory. Multiple occurrences are combined (union). |
+| `--focus=<dir>`   | Only include files under the specified directory. Multiple occurrences are combined (union); applied after exclusions. |
 | `--max-size=<size>` | Skip files larger than `<size>`. Examples: `10M`, `2G`, `1.5K`. Suffixes: `K`=KiB, `M`=MiB, `G`=GiB, `T`=TiB. |
 | `--min-size=<size>` | Skip files smaller than `<size>`. |
-| `--allow-symlinks` | Follow symbolic links (use with caution; may create infinite loops). |
-| `--test`          | Do not compute checksums – only load and filter the file list, and show the planned total files and size. |
-| `--plain-list`    | When `<type>` is `none`, output only file paths (one per line) without `<NONE>` placeholders. |
-| `--disable-multi-thd` | Disable multi‑threading. By default, multi‑threading is enabled when total size > 1 GiB. |
-| `--thd-amount=<N>` | Set the number of threads (default: hardware concurrency). |
-| `--contiguous`    | When multi‑threading, split the file list into contiguous chunks instead of interleaved. |
-| `--force-rescan`  | Recompute checksums even for files that already have a checksum in the input list (used with `path="stdin"`). |
-| `--buffer-size=<size>` | Use a static buffer of exactly `<size>` bytes. Default is dynamic (2 KB ~ 64 KB). |
-| `--max-buffer-size=<size>` | Limit the maximum buffer size when using dynamic sizing (ignored if `--buffer-size` is set). |
+| `--allow-symlinks` | Follow symbolic links (use with caution; may cause infinite loops). |
+| `--test`          | Do not compute checksums—only evaluate file filtering rules, buffer strategy, thread allocation, and report the total number and size of files. |
+| `--plain-list`    | When `<type>` is `none`, output only file paths (one per line), without the `<NONE>` placeholder. |
+| `--thd-amount=<N>` | Set the number of threads. If not specified or the value is invalid, use hardware concurrency (if total size > 1G) or 1. |
+| `--balance`       | In multi-threaded mode, sort files by size before interleaving allocation, so that each thread handles a more balanced total data size (helps save time). |
+| `--force-rescan`  | Recompute checksums even if they already exist in the input list (used with `path="stdin"`). |
+| `--buffer-size=<size>` | Use a static buffer of exactly `<size>` bytes. Default is dynamic buffer (2KB ~ 64KB). |
+| `--max-buffer-size=<size>` | When using dynamic buffer, set an upper bound. Ignored if `--buffer-size` is set. |
+| `-v` | Increase verbosity, showing the file being processed and the total number of processed files. |
 
 #### Output
 
-For multiple files, each line is `<checksum> <path>` (or just `<path>` with `--plain-list`). After the file list, a summary block is appended:
+For multiple files, each line outputs `<checksum> <path>` (or just `<path>` if `--plain-list` is used). After the file list, a summary block is appended:
 
 ```
 #
@@ -124,45 +125,37 @@ For multiple files, each line is `<checksum> <path>` (or just `<path>` with `--p
 #Error: Cannot open file: /home/user/secret2.txt
 ```
 
-If any errors occurred during checksum calculation, they are listed at the end. The program exits with status `1` if at least one such error was reported.
+If errors occur while loading the file list, they appear immediately on the console; if errors occur during checksum calculation, they are listed at the end of stdout, and the program exits with status `1`.
 
 #### Tips
 
-- Press **Ctrl+C** to stop calculation gracefully. Already processed results are still written to stdout. You can later resume by feeding the half‑finished output back with `cat half.txt | tsubaki sum <type> stdin` (resume support).
-- Use `--plain-list` together with `none` to generate a simple file list for backup purposes.
+- Press **Ctrl+C** to gracefully stop the calculation. Already processed results are still written to stdout. You can resume later by feeding the partial output back in, enabling **resume from breakpoint**: `cat half.txt | tsubaki sum <type> stdin`.
+- Combining `--plain-list` with `none` generates a simple file list.
+- For recursive directory scanning, the order of arguments after `tsubaki sum <type> <dir1>` is not sensitive. This means you can write:
+
+```bash
+tsubaki sum md5 /home/user -v --balance --exclude=/home/user/{.cache,.config} /data # Note: <type> must be immediately followed by the first directory to scan, so the program can recognize the scanning strategy.
+```
 
 ---
 
-### `mrg <fileA> <fileB> [options]`
+### `cmp <fileA> <fileB> [options]`
 
-Merge two existing checksum lists (each line: `<checksum> <path>`) into one list with lines prefixed by `A ` or `B `. The result is printed to stdout and is typically used as input for `cmp`.
+Compare two checksum files (each line format: `<checksum> <path>`). The program reads both files line by line and categorizes files as follows:
 
-**Options:** `--quiet` suppresses informational messages.
+- **[!] Modified** – Same path, different checksum.
+- **[D] Moved/Copied/Merged/Renamed** – Same checksum, different paths (grouped by checksum).
+- **[U] Deleted or Added** – Files present only in A or only in B.
+- **[=] Matched** – Same path and same checksum.
 
----
-
-### `cmp [options]`
-
-Read from stdin lines with `A ` or `B ` prefixes (typically the output of `mrg` mode) in the format:
-```
-A <checksum> <path>
-B <checksum> <path>
-```
-(lines starting with `#` are ignored). Compare the two sets and group files into categories:
-
-- **[!] Modified** – same path, different checksum.
-- **[D] Moved/copied/merged/renamed** – same checksum, different paths (grouped by checksum).
-- **[U] Deleted or added** – files present only in A or only in B.
-- **[=] Matched** – same path and same checksum.
-
-The output is printed to stdout.  
+Output is printed to stdout.
 **Options:** `--quiet` suppresses informational messages.
 
 ---
 
 ### `dup [options]`
 
-Read from stdin a list of `<checksum> <path>` (without prefix). Identify duplicate files (identical checksum) and print groups of duplicates. A suggested deletion command (`rm`) for all but the first file in each group is also printed.
+Read a list from standard input in the format `<checksum> <path>` (no prefix). Identify duplicate files (same checksum) and print duplicate groups. Also suggests a deletion command (`rm`) for all files except the first in each group.
 
 **Options:** `--quiet` suppresses informational messages.
 
@@ -170,19 +163,19 @@ Read from stdin a list of `<checksum> <path>` (without prefix). Identify duplica
 
 ### `help`
 
-Display a concise help message.
+Display concise help information.
 
 ---
 
 ## Examples
 
-### 1. Compute SHA256 for all files under `/home/user`, excluding cache and config directories
+### 1. Compute SHA256 for all files under `/home/user` and `/data`, excluding cache and config directories
 
 ```bash
-tsubaki sum sha256 /home/user --exclude=/home/user/{.cache,.config} > home_checksums.txt
+tsubaki sum sha256 /home/user /data --exclude=/home/user/{.cache,.config} > home_checksums.txt
 ```
 
-### 2. Generate a plain list of all files in `/photos` (no checksums)
+### 2. Generate a plain path list (no checksums) for all files under `/photos`
 
 ```bash
 tsubaki sum none /photos --plain-list > photo_list.txt
@@ -199,7 +192,7 @@ cat filelist.txt | tsubaki sum md5 stdin-plain-list > file_checksums.txt
 ```bash
 tsubaki sum sha256 /dirA > A.txt
 tsubaki sum sha256 /dirB > B.txt
-tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
+tsubaki cmp A.txt B.txt > comparison.txt
 ```
 
 ### 5. Find duplicate files in a photo collection
@@ -208,48 +201,48 @@ tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
 tsubaki sum md5 /photos | tsubaki dup
 ```
 
-### 6. Resume interrupted calculation
+### 6. Resume an interrupted calculation
 
 ```bash
 # First run (interrupted)
-tsubaki sum sha256 /bigdata > partial.txt
-# Later continue (partial.txt contains already computed entries)
+tsubaki sum sha256 /large_data > partial.txt
+# Resume later (partial.txt contains already computed entries)
 cat partial.txt | tsubaki sum sha256 stdin > complete.txt
 ```
 
-### 7. Use multi‑threading with 8 threads and contiguous chunking
+### 7. Multi-threaded processing with 8 threads and load balancing
 
 ```bash
-tsubaki sum sha256 /large_dir --thd-amount=8 --contiguous > sums.txt
+tsubaki sum sha256 /large_dir --thd-amount=8 --balance > sums.txt
 ```
 
 ---
 
 ## Exit Status
 
-- **0** – Success (all files processed, and no errors occurred).
-- **1** – An error occurred (invalid arguments, I/O error, or at least one checksum calculation failed).
-  In `sum` mode, if any file could not be read or its hash could not be computed, error messages are appended to the output and the program returns `1`.
-  (Errors during file list loading are printed immediately and do not affect the exit status.)
+- **0** – Success (all files processed, no errors).
+- **1** – Invalid command, error while scanning files, or error while computing checksums.
+  In `sum` mode, if any file cannot be read or its hash cannot be computed, error messages are appended to the output, and the program returns `1`.
 
 ---
 
 ## Notes
 
-- **Directory Scanning** – Scans only regular files and symlinks pointing to regular files. To exclude symlinks, add `--focus=/target_dir`.
-- **Permission Denied** – Subdirectories without read permission are silently skipped.
-- **Absolute Paths** – Only absolute paths are supported; input and output use absolute paths.
-- **Symbolic Links** – Directory symlinks are not followed by default. Use `--allow-symlinks` to follow (beware of cycles).
-- **Multithreading** – File list is distributed among threads. Default interleaving balances load; `--contiguous` splits into blocks (may cause imbalance if file sizes vary).
-- **Signal Handling** – `SIGINT` (Ctrl+C) is caught; threads exit after current file. Results are saved. For large files, exit may be delayed; use `SIGKILL` if needed.
-- **Memory Usage** – File list is fully enumerated in memory before filtering. May be a bottleneck for millions of files, but typically manageable.
-- **System Support** – Linux only (due to author's limitations).
+- **Directory Scanning** – When scanning a directory, only regular files and symbolic links pointing to regular files are recognized. If you want to exclude such symlinks, you can add a filter like `--focus=/target_dir` (where `/target_dir` is the directory to verify).
+- **Permission Denied** – While traversing directories, subdirectories that cannot be accessed due to insufficient permissions are silently skipped; scanning continues elsewhere.
+- **Absolute Paths** – Currently, only absolute paths are supported. You must specify files using absolute paths, and the program will always output absolute paths.
+- **Symbolic Links** – Directory symlinks are not followed by default. Use `--allow-symlinks` to follow them, but beware of cyclic links.
+- **Multi-threading** – When enabled, the file list is distributed among threads. The default allocation is interleaved (round-robin) to balance load; `--balance` sorts files by size before interleaving, making the total data size handled by each thread more balanced.
+- **Signal Handling** – When recursively calculating a directory, `SIGINT` (Ctrl+C) is caught. Threads exit after finishing the current file; already computed results are still written. If a thread is processing a very large file, it may take a while to exit; please be patient or send `SIGKILL`.
+- **Memory Usage** – The file list is fully enumerated in memory first, then filtered according to the specified criteria. For very large directory trees (millions of files), this could become a bottleneck, but typical hardware can handle it.
+- **System Support** – Due to the author's limited expertise, only Linux distributions are supported.
+- **Display Language** – Since the author's development environment is in English, only the English version of Tsubaki is available. If you need a Chinese version, you can translate it yourself or request it.
 
 ---
 
-## Code Architecture
+## Source Code Structure
 
-This project consists of a single source code file, and the source code structure is described in `ARCHITECTURE.md` (English) and `ARCHITECTURE.zh-cn.md` (Chinese).
+This project is a single source file. The source code structure is described in `ARCHITECTURE.md` (English) and `ARCHITECTURE.zh-cn.md` (Simplified Chinese).
 
 ---
 
@@ -261,4 +254,4 @@ This project is licensed under the MIT License – see the `LICENSE` file for de
 
 ## Developer
 
-- **Nickname** – Lawrence Charland
+- **Nickname** - Lawrence Charland

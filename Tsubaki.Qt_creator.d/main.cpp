@@ -93,28 +93,28 @@ bool find_key(const std::string& target)
     }
     return 0;
 }
-int verbose()
-{
-    if(find_key("-vv"))
-        return 2;
-    else if(find_key("-v"))
-        return 1;
-    return 0;
-}
 std::vector<std::string> get_arr(const std::string& target_key)
 {
     std::vector<std::string> arr;
     for(int i=0;i<args.size();i++)
-    {
         if(args[i].key==target_key)
             arr.push_back(args[i].value);
-    }
+    return arr;
+}
+std::vector<std::string> get_dirs_to_scan()
+{
+    std::vector<std::string> arr;
+    if(args.size()<=3)
+        return arr;
+    for(int i=3;i<args.size();i++)
+        if(args[i].key[0]!='-')
+            arr.push_back(args[i].key);
     return arr;
 }
 int get_thd_amount()
 {
     if(!cmd::find_key("--thd-amount"))
-        return std::thread::hardware_concurrency();
+        return -1;
     else
         try
         {
@@ -122,19 +122,29 @@ int get_thd_amount()
         }
         catch(...)
         {
-            return std::thread::hardware_concurrency();
+            return -1;
         }
 }
 }
 namespace cmp
 {
+bool cmp_by_size(const sum_and_dir& A,const sum_and_dir& B)
+{
+    return A.size<B.size;
+}
 bool cmp_by_sum(const sum_and_dir& A,const sum_and_dir& B)
 {
-    return A.sum < B.sum;
+    return A.sum<B.sum;
 }
 bool cmp_by_dir(const sum_and_dir& A,const sum_and_dir& B)
 {
-    return A.dir < B.dir;
+    return A.dir<B.dir;
+}
+bool cmp_by_dir_and_type(const sum_and_dir& A, const sum_and_dir& B)
+{
+    if (A.dir != B.dir)
+        return A.dir < B.dir;
+    return A.type < B.type;
 }
 }
 namespace file
@@ -212,14 +222,9 @@ struct file_list
     file_list break_apart(const int amount,int offset)
     {
         file_list res;
-        if(cmd::find_key("--contiguous"))
-            res.file_index.insert(res.file_index.end(),file_index.begin()+file_index.size()*offset/amount,file_index.begin()+(offset==amount-1?file_index.size():file_index.size()*(offset+1)/amount));
-        else
-        {
-            offset=offset%amount,res.log=log;
-            for(int i=offset;i<file_index.size();i+=amount)
-                res.file_index.push_back(file_index[i]);
-        }
+        offset=offset%amount,res.log=log;
+        for(int i=offset;i<file_index.size();i+=amount)
+            res.file_index.push_back(file_index[i]);
         return res;
     }
     void clear_invalid_sum()
@@ -260,10 +265,10 @@ struct file_list
     {
         if(file_index.empty())
             return;
-        std::sort(file_index.begin(),file_index.end(),cmp::cmp_by_dir);
+        std::sort(file_index.begin(),file_index.end(),cmp::cmp_by_dir_and_type);
         std::vector<sum_and_dir> new_flist;
         for(int i=1;i<file_index.size();i++)
-            if(file_index[i].dir==file_index[i-1].dir)
+            if(file_index[i].dir==file_index[i-1].dir&&file_index[i].type==file_index[i-1].type)
                 file_index[i].mark=file_index[i-1].mark+1;
         for(int i=0;i<file_index.size();i++)
             if(!file_index[i].mark)
@@ -279,6 +284,7 @@ struct file_list
     //Loading
     void load_files_from_dir(const std::string& dir_path)//This function was helped by DeepSeek
     {
+        int amount_before=file_index.size();
         if(log)
             std::clog<<"-->"<<logtag<<"Searching for regular files in "<<dir_path<<" ...\n";
         sum_and_dir tmp;
@@ -311,7 +317,7 @@ struct file_list
         }
         clear_dup();
         if(log)
-            std::clog<<"-->"<<logtag<<"Found "<<file_index.size()<<" regular files in "<<dir_path<<" .\n";
+            std::clog<<"-->"<<logtag<<"Found "<<file_index.size()-amount_before<<" files.\n";
     }
     void load_files_from_stream(const bool is_classed,const std::string& class_to_add,std::istream& input,const std::string& source)
     {
@@ -494,45 +500,47 @@ std::string compute_hash(std::ifstream &file, const std::string &file_path,const
 {
     Context context;
     if(!InitFunc(&context))
-        throw std::runtime_error("Hash initialization failed while calculating " + file_path);
-    size_t buf_size = calculate_buffer_size(dynamic_bsize, size_limit, target_size);
+        throw std::runtime_error("Hash initialization failed while calculating "+file_path);
+    size_t buf_size=calculate_buffer_size(dynamic_bsize,size_limit,target_size);
     std::vector<char> buffer(buf_size);
-    while(file.read(buffer.data(), buffer.size()) || file.gcount() > 0)
-        if(!UpdateFunc(&context, buffer.data(), file.gcount()))
-            throw std::runtime_error( "Hash update failed while calculating " + file_path);
+    while(file.read(buffer.data(),buffer.size())||file.gcount()>0)
+        if(!UpdateFunc(&context,buffer.data(),file.gcount()))
+            throw std::runtime_error("Hash update failed while calculating "+file_path);
+    if (file.bad())
+        throw std::runtime_error("File read error while reading "+file_path+" : badbit.");
     unsigned char hash[DigestLength];
     if(!FinalFunc(hash, &context))
-        throw std::runtime_error( "Hash final calculation failed while calculating " + file_path);
+        throw std::runtime_error("Hash final calculation failed while calculating "+file_path);
     std::stringstream ss;
-    for(int i = 0; i < DigestLength; ++i)
-        ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
+    for(int i=0;i<DigestLength;i++)
+        ss<<std::hex<<std::setw(2)<<std::setfill('0')<<static_cast<int>(hash[i]);
     return ss.str();
 }
-std::string calculate_file_checksum(const std::string &file_path, const std::string &checksum_type,const bool dynamic_bsize,const long long int size_limit,const long long int target_size)
+std::string calculate_file_checksum(const std::string &file_path,const std::string &checksum_type,const bool dynamic_bsize,const long long int size_limit,const long long int target_size)
 {
-    std::ifstream file(file_path, std::ios::binary);
+    std::ifstream file(file_path,std::ios::binary);
     if(!file.good())
-        throw std::runtime_error( "Failed to open file: " + file_path);
-    if(checksum_type == "md5")
-        return compute_hash<MD5_CTX, MD5_DIGEST_LENGTH, MD5_Init, MD5_Update, MD5_Final>(file, file_path,dynamic_bsize,size_limit,target_size);
-    else if(checksum_type == "sha1")
-        return compute_hash<SHA_CTX, SHA_DIGEST_LENGTH, SHA1_Init, SHA1_Update, SHA1_Final>(file, file_path,dynamic_bsize,size_limit,target_size);
-    else if(checksum_type == "sha256")
-        return compute_hash<SHA256_CTX, SHA256_DIGEST_LENGTH, SHA256_Init, SHA256_Update, SHA256_Final>(file, file_path,dynamic_bsize,size_limit,target_size);
-    else if(checksum_type == "sha512")
-        return compute_hash<SHA512_CTX, SHA512_DIGEST_LENGTH, SHA512_Init, SHA512_Update, SHA512_Final>(file, file_path,dynamic_bsize,size_limit,target_size);
-    else if(checksum_type == "none")
+        throw std::runtime_error("Failed to open file: "+file_path);
+    if(checksum_type=="md5")
+        return compute_hash<MD5_CTX,MD5_DIGEST_LENGTH,MD5_Init,MD5_Update,MD5_Final>(file,file_path,dynamic_bsize,size_limit,target_size);
+    else if(checksum_type=="sha1")
+        return compute_hash<SHA_CTX,SHA_DIGEST_LENGTH,SHA1_Init,SHA1_Update,SHA1_Final>(file,file_path,dynamic_bsize,size_limit,target_size);
+    else if(checksum_type=="sha256")
+        return compute_hash<SHA256_CTX,SHA256_DIGEST_LENGTH,SHA256_Init,SHA256_Update,SHA256_Final>(file,file_path,dynamic_bsize,size_limit,target_size);
+    else if(checksum_type=="sha512")
+        return compute_hash<SHA512_CTX,SHA512_DIGEST_LENGTH,SHA512_Init,SHA512_Update,SHA512_Final>(file,file_path,dynamic_bsize,size_limit,target_size);
+    else if(checksum_type=="none")
         return "<NONE>";
     else
-        throw std::runtime_error( "Unsupported checksum type: " + checksum_type);
+        throw std::runtime_error("Unsupported checksum type: "+checksum_type);
 }
 bool is_sum(std::string x)
 {
-    if(x == "sha256" || x == "sha1" || x == "md5" || x == "sha512"||x=="none")
+    if(x=="sha256"||x=="sha1"||x=="md5"||x=="sha512"||x=="none")
         return 1;
     return 0;
 }
-int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const int in_detail,const bool dynamic_bsize,const long long int size_limit,const bool keep,const int ID)
+int calculate_dir_checksum(file::file_list &data, const std::string sum_type,const bool in_detail,const bool dynamic_bsize,const long long int size_limit,const bool keep,const int ID)
 {
     if(!is_sum(sum_type))
     {
@@ -546,7 +554,6 @@ int calculate_dir_checksum(file::file_list &data, const std::string sum_type,con
         if(kill_flag.load()==1)
         {
             std::fprintf(stderr,"==>SUM: Thread #%d: Received termination signal, exiting...\n",ID);
-            processed+=i;
             return 1;
         }
         if(data.file_index[i].mask)
@@ -554,6 +561,7 @@ int calculate_dir_checksum(file::file_list &data, const std::string sum_type,con
             if(data.file_index[i].sum.empty())
                 data.file_index[i].sum="<NONE>";
             data.error_stack.push_back("Cannot process "+data.file_index[i].dir+": forbidden by context.");
+            continue;
         }
         if(data.file_index[i].sum!="<NONE>"&&keep)
         {
@@ -562,22 +570,10 @@ int calculate_dir_checksum(file::file_list &data, const std::string sum_type,con
         }
         if(in_detail != 0)
         {
-            std::clog << '[' << i << '/' << total << "][";
-            if(in_detail==1)
-            {
-                int j = 0;
-                for(; j < 100; j++)
-                    if(j <= (i) * 100 / total)
-                        std::clog << '#';
-                    else
-                        break;
-                for(; j < 100; j++)
-                    std::clog << '.';
-            }
-            else
-                std::clog<<compress_string(data.file_index[i].dir);
+            std::clog<<'['<<processed<<"]["<<compress_string(data.file_index[i].dir);
             std::clog << "]\r" << std::flush;
         }
+        processed++;
         if(sum_type!="none")
             try
             {
@@ -594,7 +590,6 @@ int calculate_dir_checksum(file::file_list &data, const std::string sum_type,con
             continue;
         data.file_index[i].sum=tmpsum;
     }
-    processed+=data.file_index.size();
     return 0;
 }
 }
@@ -624,9 +619,10 @@ int mode_sum(int argc, char** argv)
         std::cerr << "==>SUM: Error: At least three arguments are required for 'sum' mode." << std::endl;
         return 1;
     }
-    if(!sum::is_sum(std::string(argv[2])))
+    std::string sum_type=std::string(argv[2]);
+    if(!sum::is_sum(sum_type))
     {
-        std::cerr<<"==>SUM: Error: "<<std::string(argv[2])<<" is not a supported checksum type.\n";
+        std::cerr<<"==>SUM: Error: "<<sum_type<<" is not a supported checksum type.\n";
         return 1;
     }
     std::filesystem::path source = std::string(argv[3]);
@@ -635,22 +631,22 @@ int mode_sum(int argc, char** argv)
     if(source.string()=="stdin")//stdin
     {
         if(allow_log)
-            std::clog<<"\n-->SUM: Will load file list (tsubaki file list format) from stdin...\n";
+            std::clog<<"-->SUM: Will load file list (tsubaki file list format) from stdin...\n";
         load_from_stdin=1;
     }
     else if(source.string()=="stdin-plain-list")
     {
         if(allow_log)
-            std::clog<<"\n-->SUM: Will load file list (plain list format) from stdin...\n";
+            std::clog<<"-->SUM: Will load file list (plain list format) from stdin...\n";
         load_from_stdin=2;
     }
     else if(std::filesystem::is_regular_file(source))//Regular file
     {
         if(allow_log)
-            std::clog <<std::endl<<"-->SUM: "<< std::string(argv[3]) << " is a regular file." << std::endl << "Calculating " << std::string(argv[2]) << " checksum of this file..." << std::endl;
+            std::clog <<std::endl<<"-->SUM: "<< std::string(argv[3]) << " is a regular file." << std::endl << "Calculating " << sum_type << " checksum of this file..." << std::endl;
         try
         {
-            std::cout << sum::calculate_file_checksum(std::string(argv[3]),std::string(argv[2]),0,16LL*1024,0)<<' '<<std::string(argv[3])<< std::endl;
+            std::cout << sum::calculate_file_checksum(source,sum_type,0,16LL*1024,0)<<' '<<std::string(argv[3])<< std::endl;
         }
         catch(const std::exception& msg)
         {
@@ -664,22 +660,38 @@ int mode_sum(int argc, char** argv)
         std::cerr << "==>SUM: Error: " << std::string(argv[3]) << " is not a regular file or a directory." << std::endl;
         return 1;
     }
-    else if(allow_log)
-        std::clog<<"\n-->SUM: Will load file list from "<<source.string()<<" ...\n";
     file::file_list data;//Major data structure
     data.log=allow_log;
     data.logtag="SUM: ";
+    if(allow_log)
+        std::clog<<"===SUM [SCAN]===\n";
     if(!load_from_stdin)//Load the file-list
-        data.load_files_from_dir(source.string());
+    {
+        std::vector<std::string> dirs_to_scan=cmd::get_dirs_to_scan();
+        for(int i=0;i<dirs_to_scan.size();i++)
+            data.load_files_from_dir(dirs_to_scan[i]);
+    }
     else if(load_from_stdin==1)
         data.load_files_from_stream(0,"",std::cin,"stdin");
     else
         data.load_plain_flist_from_stream(std::cin);
     data.refresh_file_size();//Calculate total file size
+    if(allow_log)
+        std::clog<<"\n===SUM [FILTER]===\n";
     data.filter_by_args();//Filter the file-list
+    if(data.file_index.empty())
+    {
+        if(allow_log)
+            std::clog<<"==>SUM: No files matching the requirements were found. Calculation will not be started.\n";
+        return 0;
+    }
+    auto start_time=std::chrono::steady_clock::now();//Start the timer
+    std::string start_time_str=lib::current_time();
     if(allow_log)
         std::clog<<"-->SUM: Eventually "<<data.file_index.size()<<" regular files in "<<source.string()<<" were loaded in memory.\n";
     bool keep=!cmd::find_key("--force-rescan");
+    if(allow_log)
+        std::clog<<"\n===SUM [CONFIG]===\n-->SUM: Force-rescan is "<<(keep?"off\n":"on\n");
     long long int total_size=data.total_size(keep);
     bool dynamic_bsize=1;//Calculate buffer size
     if(cmd::find_key("--buffer-size"))
@@ -691,39 +703,27 @@ int mode_sum(int argc, char** argv)
         return 1;
     }
     if(allow_log)
-        std::clog<<"\n-->SUM: Using "<<(dynamic_bsize?"dynamic buffer size (<=":"static buffer size (=")<<(dynamic_bsize?std::min(64LL*1024,bsize_limit):bsize_limit)<<" bytes).\n";
-    int allow_multi_thd=1;//Calc the amount of thd
-    if(std::string(argv[2])=="none"||total_size<=1LL*1024*1024*1024||cmd::find_key("--disable-multi-thd"))
-        allow_multi_thd=0;
+        std::clog<<"-->SUM: Using "<<(dynamic_bsize?"dynamic buffer size (<=":"static buffer size (=")<<(dynamic_bsize?std::min(64LL*1024,bsize_limit):bsize_limit)<<" bytes).\n";
     int thd_amount=cmd::get_thd_amount();
-    if(thd_amount<=0)
-        thd_amount=4;
-    if(!allow_multi_thd)
-        thd_amount=1;
-    if(thd_amount==1)
-        allow_multi_thd=0;
+    if(thd_amount==-1)
+        thd_amount=(sum_type=="none"||total_size<=1LL*1024*1024*1024?1:std::thread::hardware_concurrency());
     if(allow_log)
     {
-        std::clog<<"\n-->SUM: Total size is "<<total_size<<" bytes, "<<(total_size/1024)/1024<<" MB or "<<((total_size/1024)/1024)/1024<<" GB.\n";
-        std::clog<<"==>SUM: Attention: All results will be printed to stdout. Redirect stdout to a text file if you want to save the results.\n";
-        if(!allow_multi_thd)
-            std::clog<<"-->SUM: Notice: Multi-thread is disabled.\n";
-        else
-            std::clog<<"-->SUM: Notice: Multi-thread is enabled. \n                "
-                      <<thd_amount<<" threads will be started.\n                Using "
-                      <<(cmd::find_key("--contiguous")?"contiguous ":"interleaved ")<<"chunking.\n";
-        std::clog<<"\n-->SUM: Calculating checksums..." << std::endl;
+        std::clog<<"-->SUM: Total size is "<<total_size<<" bytes, "<<(total_size/1024)/1024<<" MB or "<<((total_size/1024)/1024)/1024<<" GB.\n";
+        std::clog<<"-->SUM: "<<thd_amount<<" thread(s) will be started. Balance is "<<(cmd::find_key("--balance")?"on":"off")<<".\n";
+        std::clog<<"\n===SUM [PROGRESS]===\n-->SUM: Calculating checksums..." << std::endl;
     }
     if(cmd::find_key("--test"))//Pause
     {
         std::clog<<"-->SUM: Calculation will not be started for argument: --test.\n";
         return 0;
     }
-    auto start_time=std::chrono::steady_clock::now();//Start the timer
     std::vector<file::file_list> sub_data;
     std::vector<std::thread> calc;
     int monitor_thd=0;
     long long int max_subdata_size=0,this_size;
+    if(cmd::find_key("--balance"))
+        std::sort(data.file_index.begin(),data.file_index.end(),cmp::cmp_by_size);
     for(int i=0;i<thd_amount;i++)//Chunk
     {
         file::file_list tmp_list=data.break_apart(thd_amount,i);
@@ -733,11 +733,14 @@ int mode_sum(int argc, char** argv)
             monitor_thd=i,max_subdata_size=this_size;
     }
     data.file_index.clear();
-    if(cmd::verbose())
+    if(cmd::find_key("-v")&&thd_amount>1)
+    {
+        std::clog<<"==>SUM: Attention: All results will be printed to stdout. Redirect stdout to a text file if you want to save the results.\n";
         std::clog<<"==>SUM: Attention: This progress only stands for one of the threads (Thread #"<<monitor_thd<<"), because this thread is assigned the largest total file size.\n";
+    }
     signal(SIGINT,lib::signal_handler);//Start the major calc progress
     for(int i=0;i<thd_amount;i++)
-        calc.emplace_back(sum::calculate_dir_checksum,std::ref(sub_data[i]),std::string(argv[2]),(i==monitor_thd?cmd::verbose():0),dynamic_bsize,bsize_limit,keep,i);
+        calc.emplace_back(sum::calculate_dir_checksum,std::ref(sub_data[i]),sum_type,(i==monitor_thd?cmd::find_key("-v"):0),dynamic_bsize,bsize_limit,keep,i);
     for(int i=0;i<thd_amount;i++)
         calc[i].join();
     for(int i=0;i<thd_amount;i++)
@@ -745,12 +748,13 @@ int mode_sum(int argc, char** argv)
             data.error_stack.insert(data.error_stack.end(),sub_data[i].error_stack.begin(),sub_data[i].error_stack.end());
     auto end_time=std::chrono::steady_clock::now();//Stop the timer
     auto duration=std::chrono::duration_cast<std::chrono::microseconds>(end_time-start_time);
+    std::string end_time_str=lib::current_time();
     if(allow_log)//Sum up
     {
         std::clog << "                                                                                                                        \r" << std::flush;
         std::clog << "-->SUM: Calculation finished in "<<duration.count()/1000000.0<<" secs." << std::endl;
     }
-    bool plain_list=(std::string(argv[2])=="none")&&cmd::find_key("--plain-list");
+    bool plain_list=(sum_type=="none")&&cmd::find_key("--plain-list");
     data.print_list_to_stream(0,!plain_list,std::cout);
     if(plain_list)
         return 0;
@@ -760,7 +764,8 @@ int mode_sum(int argc, char** argv)
         "\n#Failed:         "<<data.error_stack.size()<<
         "\n#Kept:           "<<sum::kept.load()<<
         "\n#Unprocessed:    "<<data.file_index.size()-sum::processed.load()<<
-        "\n#Time Finished:  "<<lib::current_time()<<
+        "\n#Time started:   "<<start_time_str<<
+        "\n#Time Finished:  "<<end_time_str<<
         "\n#Duration:       "<<duration.count()/1000000.0<<" secs"<<
         "\n#Command:        ";
     for(int i=0;i<argc;i++)
@@ -775,55 +780,7 @@ int mode_sum(int argc, char** argv)
         std::cerr << "==>SUM: Several errors were reported. The collected error messages have been appended to the end of stdout." << std::endl;
         return 1;
     }
-    return 0;
-}
-int mode_mrg(int argc, char** argv)
-{
-    if(argc <= 3)
-    {
-        std::cerr << "==>MRG: Error: At least three arguments are required for 'mrg' mode." << std::endl;
-        return 1;
-    }
-    std::string inputA(argv[2]), inputB(argv[3]), tmp;
-    if(!std::filesystem::exists(inputA))
-    {
-        std::cerr << "==>MRG: Error: Doesn't exist: " << inputA << std::endl;
-        return 1;
-    }
-    if(!std::filesystem::exists(inputB))
-    {
-        std::cerr << "==>MRG: Error: Doesn't exist: " << inputB << std::endl;
-        return 1;
-    }
-    std::ifstream streamA(inputA), streamB(inputB);
-    if(!streamA.good())
-    {
-        std::cerr << "==>MRG: Error: Cannot read the file: " << inputA << std::endl;
-        return 1;
-    }
-    if(!streamB.good())
-    {
-        std::cerr << "==>MRG: Error: Cannot read the file: " << inputB << std::endl;
-        return 1;
-    }
-    file::file_list data;
-    data.log=!cmd::find_key("--quiet");
-    data.logtag="MRG: ";
-    data.load_files_from_stream(0,"A",streamA,inputA);
-    data.load_files_from_stream(0,"B",streamB,inputB);
-    data.print_list_to_stream(1,1,std::cout);
-    if(data.error_stack.size()!=0)
-    {
-        std::cout << "\n#Error messages:\n";
-        data.print_err_to_stream("#Error",std::cout);
-    }
-    if(!cmd::find_key("--quiet"))
-        std::clog << "-->MRG: Merging finished." << std::endl;
-    if(!data.error_stack.empty())
-    {
-        std::cerr << "==>MRG: Several errors were reported. The collected error messages have been appended to the end of stdout." << std::endl;
-        return 1;
-    }
+    std::cout<<std::endl;
     return 0;
 }
 int mode_dup()
@@ -856,7 +813,7 @@ int mode_dup()
             i--;
         }
     if(dup_cnt)
-        std::cout<<"\nRecommended clearing command: rm ";
+        std::cout<<"\nRecommended clearing command: \nrm ";
     for(int i=0;i<recommend.size();i++)
         std::cout<<"\'"<<recommend[i]<<"\' ";
     if(data.error_stack.size() != 0)
@@ -873,17 +830,44 @@ int mode_dup()
     }
     return 0;
 }
-int mode_cmp()
+int mode_cmp(int argc,char** argv)
 {
     bool log=!cmd::find_key("--quiet");
+    if(argc <= 3)
+    {
+        std::cerr << "==>CMP: Error: At least three arguments are required for 'cmp' mode." << std::endl;
+        return 1;
+    }
+    std::string inputA(argv[2]), inputB(argv[3]), tmp;
+    if(!std::filesystem::exists(inputA))
+    {
+        std::cerr << "==>CMP: Error: Doesn't exist: " << inputA << std::endl;
+        return 1;
+    }
+    if(!std::filesystem::exists(inputB))
+    {
+        std::cerr << "==>CMP: Error: Doesn't exist: " << inputB << std::endl;
+        return 1;
+    }
+    std::ifstream streamA(inputA), streamB(inputB);
+    if(!streamA.good())
+    {
+        std::cerr << "==>CMP: Error: Cannot read the file: " << inputA << std::endl;
+        return 1;
+    }
+    if(!streamB.good())
+    {
+        std::cerr << "==>CMP: Error: Cannot read the file: " << inputB << std::endl;
+        return 1;
+    }
     file::file_list data;
     data.log=log;
     data.logtag="CMP: ";
-    data.load_files_from_stream(1,"",std::cin,"stdin");
+    data.load_files_from_stream(0,"A",streamA,inputA);
+    data.load_files_from_stream(0,"B",streamB,inputB);
     data.clear_invalid_sum();
     std::vector<std::string> modified, matched;
     sum_and_dir tmpdata;
-    std::string tmp;
     int i = 0;
     if(log)
         std::clog << "-->CMP: Calculating phase 1 comparison..." << std::endl;
@@ -961,50 +945,46 @@ int mode_cmp()
 int mode_help()
 {
     std::cout<<R"(
-Tsubaki v1.0 – checksum utility for file integrity, comparison & duplicate detection
+Tsubaki v1.1 – checksum utility for file integrity, comparison & duplicate detection
 
 USAGE: tsubaki <command> [options]
 
 COMMANDS:
-  sum <type> <path> [options]   Compute checksums for files/directories.
+  sum <type> [paths] [options]   Compute checksums for files/directories.
     <type>: md5|sha1|sha256|sha512|none
-    <path>: file, directory, "stdin" (tsubaki format) or "stdin-plain-list"
+    [paths]: a file, some directories, "stdin" (tsubaki format) or "stdin-plain-list"
     Options:
-      --exclude=<dir>           Exclude files under <dir> (can repeat)
-      --focus=<dir>             Only include files under <dir> (union)
-      --max-size=<size>         Skip files larger than <size> (e.g. 1.5M, 2G)
-      --min-size=<size>         Skip files smaller than <size>
-      --allow-symlinks          Follow symlinks
-      --test                    Dry run (no checksum calculation)
-      --quiet                   Suppress informational messages
-      --plain-list              With type=none: output only paths
-      --disable-multi-thd       Disable multi‑threading
-      --thd-amount=<N>          Set number of threads
-      --contiguous              Chunk file list contiguously for threads
-      --force-rescan            Recompute checksums even if present (stdin)
-      --buffer-size=<size>      Static buffer size (default dynamic ≤64K)
-      --max-buffer-size=<size>  Upper bound for dynamic buffer
-      -v, -vv                   Verbosity (progress bar / file names)
+      --exclude=<dir>               Exclude files under <dir> (can repeat)
+      --focus=<dir>                 Only include files under <dir> (union)
+      --max-size=<size>             Skip files larger than <size> (e.g. 1.5M, 2G)
+      --min-size=<size>             Skip files smaller than <size>
+      --allow-symlinks              Follow symlinks
+      --test                        Dry run (no checksum calculation)
+      --quiet                       Suppress informational messages
+      --plain-list                  With type=none: output only paths
+      --thd-amount=<N>              Set number of threads
+      --balance                     Balance the load of threads
+      --force-rescan                Recompute checksums even if present (stdin)
+      --buffer-size=<size>          Static buffer size (default dynamic ≤64K)
+      --max-buffer-size=<size>      Upper bound for dynamic buffer
+      -v                            Verbosity
 
-  mrg <fileA> <fileB> [options] Merge two checksum lists (adds 'A '/'B ' prefix).
-    Options: --quiet
-
-  cmp [options]                 Compare A/B‑prefixed lists from stdin.
+  cmp <fileA> <fileB> [options]     Compare A/B‑prefixed lists from stdin.
     Groups: [!] Modified, [D] Moved/copied, [U] Deleted/added, [=] Matched.
     Options: --quiet
 
-  dup [options]                 Find duplicates from stdin list (<sum> <path>).
+  dup [options]                     Find duplicates from stdin list (<sum> <path>).
     Options: --quiet
 
-  help                          Show this help.
+  help                              Show this help.
 
 EXIT STATUS: 0 success, 1 error.
 
 EXAMPLES:
-  tsubaki sum sha256 /home/user --exclude=/home/usr/.cache > sums.txt
+  tsubaki sum sha256 /home/user /data --exclude=/home/usr/.cache > sums.txt
   cat paths.txt | tsubaki sum md5 stdin-plain-list
   tsubaki sum none /dir --plain-list > file-list.txt
-  tsubaki mrg A.txt B.txt | tsubaki cmp > comparison.txt
+  tsubaki cmp A.txt B.txt > comparison.txt
   tsubaki sum md5 /photos | tsubaki dup
 
 For full documentation, see README.md in English or README.zh-cn.md in Simplified Chinese.
@@ -1025,14 +1005,12 @@ int main(int argc, char** argv)
         cmd::init(argc,argv);
         if(mode == "sum")
             return major_func::mode_sum(argc, argv);
-        else if(mode == "mrg")
-            return major_func::mode_mrg(argc, argv);
         else if(mode == "cmp")
-            return major_func::mode_cmp();
-        else if(mode == "help")
-            return major_func::mode_help();
+            return major_func::mode_cmp(argc,argv);
         else if(mode=="dup")
             return major_func::mode_dup();
+        else if(mode == "help")
+            return major_func::mode_help();
         else
         {
             std::cerr << "==>Error: Unknown subcommand.\nType 'tsubaki help' for usage." << std::endl;
