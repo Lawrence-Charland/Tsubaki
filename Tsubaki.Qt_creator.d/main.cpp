@@ -11,6 +11,8 @@
 #include <openssl/md5.h>
 #include <openssl/sha.h>
 #include <unistd.h>
+#include <sys/ioctl.h>      // [MODIFIED] ioctl / TIOCGWINSZ
+#include <termios.h>        // [MODIFIED] struct winsize
 #include <iomanip>
 #include <chrono>
 #include <cmath>
@@ -466,15 +468,41 @@ namespace sum
 {
 std::atomic<bool> kill_flag{0};
 std::atomic<int> processed{0},kept{0};
+
+// [MODIFIED] 新增：获取“终端宽度的一半”作为进度条宽度
+int get_terminal_half_width()
+{
+    struct winsize ws;
+    // 进度条输出到 std::clog（stderr），优先取 stderr 的终端宽度
+    if (isatty(STDERR_FILENO) && ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0)
+        return std::max(static_cast<int>(ws.ws_col) / 2, 20);
+    if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0)
+        return std::max(static_cast<int>(ws.ws_col) / 2, 20);
+    // 再退一步：使用环境变量 COLUMNS
+    if (const char* cols = std::getenv("COLUMNS"))
+    {
+        try
+        {
+            int c = std::stoi(cols);
+            if (c > 0)
+                return std::max(c / 2, 20);
+        }
+        catch (...) {}
+    }
+    return 100; // 非终端环境：保持原有的固定宽度，行为不变
+}
+
+// [MODIFIED] 宽度由固定 100 改为终端宽度的一半
 std::string compress_string(std::string target)
 {
-    if (target.length() > 100)
+    const int width = get_terminal_half_width();
+    if (target.length() > width)
     {
-        target.resize(97);
+        target.resize(width - 3);
         target.append("...");
     }
     else
-        target.resize(100, ' ');
+        target.resize(width, ' ');
     return target;
 }
 long long int calculate_buffer_size(const bool dynamic_bsize,const long long int size_limit,const long long int target_size)
@@ -751,7 +779,8 @@ int mode_sum(int argc, char** argv)
     std::string end_time_str=lib::current_time();
     if(allow_log)//Sum up
     {
-        std::clog << "                                                                                                                        \r" << std::flush;
+        // [MODIFIED] 擦除进度行的空格数也随终端宽度动态调整（width + 20，多出的余量用于覆盖 "[N][" 的计数部分）
+        std::clog << std::string(sum::get_terminal_half_width() + 20, ' ') << "\r" << std::flush;
         std::clog << "-->SUM: Calculation finished in "<<duration.count()/1000000.0<<" secs." << std::endl;
     }
     bool plain_list=(sum_type=="none")&&cmd::find_key("--plain-list");
