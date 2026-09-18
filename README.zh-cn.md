@@ -1,247 +1,277 @@
-这是一个个人练手项目，也是我接触开发式编程以来创建的第一个项目，欢迎大家使用。如果发现任何问题，欢迎指教。
-
-*注意：如果想对仓库做任何修改，请先对我说一声。*
-
-以下是工具介绍：
-
----
-
-
 # Tsubaki
 
-Tsubaki 是一个校验和工具，用于验证文件完整性、比较目录和检测重复文件。它支持多种哈希算法（MD5、SHA1、SHA256、SHA512），并提供灵活的输入源——目录、文件列表或纯路径列表，当然也附带支持单文件校验。多线程处理和动态缓冲区大小调整使其适用于大数据集。
+一个用于文件完整性校验的命令行校验和工具，使用现代 C++20 编写。
 
-## 特性
+[English](README.md)
 
-- **求和模式** – 递归计算目录中所有文件的校验和，支持直接扫描目录或从标准输入读取文件列表进行计算。
-- **去重模式** – 基于相同的校验和识别重复文件，附带建议删除命令。
-- **比较模式** – 读取并比较两个校验结果，将文件分类为已修改、已移动/复制、已添加/删除或匹配。
-- **多线程加速** – 对于大型任务（目录计算，总大小>1GB）自动启用，充分压榨硬件性能；可配置线程数和分块策略。
-- **灵活过滤** – 聚焦或排除子目录、按文件大小过滤，允许跟随目录的符号链接。
-- **进度报告** – 详细模式显示进度条或当前正在处理的文件名。
-- **动态缓冲区** - 根据文件大小自动调整缓冲区大小，尽量提高效率。
-- **优雅中断** – 按 Ctrl+C 可停止处理；已计算的结果仍会写入标准输出。
+## 功能特性
 
-## 构建要求
+- **校验和计算** – 对文件与目录计算校验和，支持 OpenSSL 提供的全部摘要算法
+  （MD4/MD5、SHA-1、SHA-2、SHA-3、SHAKE、BLAKE2）。
+- **递归扫描** – 递归扫描目录，可选择跟随符号链接并容忍权限不足。
+- **多种输入** – 支持普通文件、目录，以及从标准输入读取的 tsubaki 格式校验和
+  列表或纯路径列表。
+- **过滤** – 支持排除路径前缀，并按文件大小上下限过滤。
+- **多线程** – 使用按硬件并发数配置的线程池并行计算，任务通过无锁队列分发，
+  读取缓冲区按文件大小动态调整。
+- **可续算** – 除非指定 `--force-scan`，输入列表中已有的哈希会被直接复用，因此
+  中断后的任务可以续算。
+- **进度条** – 当 stderr 为终端时显示实时进度，包含文件数量与已处理字节数。
+- **输出清晰** – 结果输出到 stdout，日志输出到 stderr，末尾附带汇总报告。
 
-Tsubaki 需要 C++17 编译器、OpenSSL 开发库和 pthreads（在类 Unix 系统上）。
+## 环境要求
 
-### 依赖项
+- 支持 C++20 的编译器（GCC 13+、Clang 16+、Apple Clang 15+ 或 MSVC 19.29+）
+- CMake 3.16+
+- OpenSSL 开发库
+- Linux、macOS 或 Windows
 
-- 一台安装了Linux发行版的电脑
-- C++17 标准库
-- OpenSSL（libcrypto）
-- POSIX 线程
-- `filesystem`（C++17 的一部分；在较旧的编译器上可能需要 `-lstdc++fs`）
+## 构建
 
-### 编译
-
-```bash
-g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread #你也可以添加其他参数，或换编译器
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 ```
 
-在某些系统上，你可能需要添加 `-lstdc++fs`。如果你的编译器完全支持带有集成 `std::filesystem` 的 C++17，则不需要额外库。
+可执行文件位于 `build/tsubaki`。
 
-你也可以直接运行项目文件夹下的 `build` 脚本（需要root权限）。
+### Windows 上的 OpenSSL
 
-#### 注意
+本项目不附带 OpenSSL，需要先自行安装。任选下面一种方式，然后用 CMake 配置项目。
 
-建议在编译前先检查各文件（至少要检查**源代码**）的SHA256校验和，并与项目文件夹下的 `Checksum.sha256.txt` 的内容比对。
+**方式一：vcpkg（推荐）**
+
+```sh
+git clone https://github.com/microsoft/vcpkg.git
+.\vcpkg\bootstrap-vcpkg.bat
+.\vcpkg\vcpkg install openssl:x64-windows
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+```
+
+**方式二：预编译安装包**
+
+安装 Win64 OpenSSL 3.x（例如来自
+<https://slproweb.com/products/Win32OpenSSL.html>），然后指定安装路径：
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64"
+cmake --build build --config Release
+```
+
+**方式三：Chocolatey**
+
+```sh
+choco install openssl
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64"
+cmake --build build --config Release
+```
+
+运行时需要能访问 `libcrypto-3-x64.dll`：把 OpenSSL 的 `bin` 目录加入 `PATH`，或将该
+DLL 复制到 `tsubaki.exe` 同目录。
+
+### CMake 选项
+
+| 选项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `CMAKE_BUILD_TYPE` | – | 计算校验和推荐使用 `Release` |
+| `BUILD_TESTING` | `ON` | 构建测试（需要 GoogleTest） |
+| `TSUBAKI_SANITIZE` | `OFF` | 开启 AddressSanitizer 与 UBSan |
 
 ## 用法
 
-```
-tsubaki <command> [options]
-```
-
-命令：`sum`, `cmp`, `dup`, `help`
-
-### 全局选项
-
-- `--quiet` – 禁止信息性消息（错误仍会输出到 stderr）。
-
----
-
-## 命令语法
-
-### `sum <type> [paths] [options]`
-
-计算文件的校验和。
-
-**`<type>`** – 可选值：`md5`、`sha1`、`sha256`、`sha512`、`none`。
-使用 `none` 时不计算校验和；输出为路径列表（可选择包含 `<NONE>` 占位符）。使用 `--plain-list` 仅输出路径。
-
-**`[paths]`** 可以是：
-- **普通文件** – 打印其校验和（或 `<NONE>`）并退出。
-- **目录** – 递归扫描目录中所有普通文件，计算校验和，并为每个文件输出 `<checksum> <relative-path>`。允许指定多个目录 **（详见“提示”部分）** 。
-- **`"stdin"`** – 读取现有列表，格式为 `<checksum> <path>`（以 `#` 开头的行将被忽略）。保留已有的校验和（除非使用 `--force-rescan`）以避免重新计算。
-- **`"stdin-plain-list"`** – 读取纯文件路径（每行一个）并为其计算校验和。
-
-#### `sum` 的选项
-
-| 选项 | 描述 |
-|------|------|
-| `--exclude=<dir>` | 排除指定目录下的文件。若指定多个则取并集。 |
-| `--focus=<dir>`   | 仅包含指定目录下的文件，若指定多个则取并集；在排除之后应用。 |
-| `--max-size=<size>` | 跳过大于 `<size>` 的文件。示例：`10M`、`2G`、`1.5K`。后缀：`K`=KiB、`M`=MiB、`G`=GiB、`T`=TiB。 |
-| `--min-size=<size>` | 跳过小于 `<size>` 的文件。 |
-| `--allow-symlinks` | 跟随符号链接（谨慎使用；可能导致无限循环）。 |
-| `--test`          | 不计算校验和——仅计算文件过滤规则、缓冲区策略、线程分配策略，同时预告总文件数目和大小。 |
-| `--plain-list`    | 当 `<type>` 为 `none` 时，仅输出文件路径（每行一个），不包含 `<NONE>` 占位符。 |
-| `--thd-amount=<N>` | 设置线程数。未指定或键值无效时使用硬件并发数（待处理大小>1G）或1。 |
-| `--balance`       | 在多线程时先按文件大小排序再交错分配，使各线程处理的总数据量更均衡（有助于节省时间）。 |
-| `--force-rescan`  | 即使输入列表中的文件已有校验和，也重新计算，与 `path="stdin"` 一起使用。 |
-| `--buffer-size=<size>` | 使用静态缓冲区，大小精确为 `<size>` 字节。默认使用动态缓冲区（2KB ~ 64KB）。 |
-| `--max-buffer-size=<size>` | 使用动态大小时限制最大缓冲区大小，若设置了 `--buffer-size` 则忽略此选项。 |
-| `-v` | 增加详细程度，显示正在处理的文件名和已处理的文件总数。 |
-
-#### 输出
-
-对于多个文件，每行输出 `<checksum> <path>`（若使用 `--plain-list` 则仅为 `<path>`）。文件列表后附加一个摘要块：
-
-```
-#
-#----------General Report----------
-#Total:          1234
-#Succeed:        1230
-#Failed:         2
-#Kept:           2
-#Unprocessed:    0
-#Time Finished:  2025-03-15-10-30-45
-#Duration:       12.34 secs
-#Command:        tsubaki sum sha256 /home/user ...
-#Error messages:
-#Error: Cannot open file: /home/user/secret1.txt
-#Error: Cannot open file: /home/user/secret2.txt
+```text
+tsubaki <命令> [选项] [路径...]
 ```
 
-如果在加载文件列表时发生错误，它们会立即出现在控制台上；如果在计算校验时发生错误，它们会列在stdout末尾，而且程序将以状态 `1` 退出。
+### 命令
 
-#### 提示
+| 命令 | 说明 |
+| --- | --- |
+| `sum <算法> <路径...>` | 计算文件与目录的校验和 |
+| `cmp <文件A> <文件B>` | 比较两个校验和列表并报告差异 |
+| `dup` | 从 stdin 的校验和列表查找重复文件 |
+| `help [键]` | 显示英文帮助；给出 `键` 时显示该主题的详细信息 |
+| `help-cn [键]` | 同 `help`，但输出中文 |
 
-- 按 **Ctrl+C** 可优雅地停止计算。已处理的结果仍会写入标准输出。之后可以通过将半成品输出重新输入来继续，实现**断点续算**：`cat half.txt | tsubaki sum <type> stdin`。
-- 将 `--plain-list` 与 `none` 结合使用，可生成简单文件列表。
-- 对于递归扫描目录，`tsubaki sum <type> <dir1>` 后面的所有参数的顺序不敏感，这意味着您可以这样输入：
+`键` 可以是命令、输入、选项或算法，例如 `tsubaki help sum`、
+`tsubaki help --exclude`、`tsubaki help-cn stdin`。
 
-```bash
-tsubaki sum md5 /home/user -v --balance --exclude=/home/user/{.cache,.config} /data #注意： <type>后面必须紧跟第一个待扫描目录，方便本程序识别扫描策略。
+### 比较与去重
+
+`cmp` 与 `dup` 都消费 tsubaki 格式的校验和列表（每行一条 `<哈希> <路径>`），
+例如 `sum` 的输出。
+
+`dup` 从 stdin 读取列表，把哈希相同的记录分组输出，并在末尾给出一条建议的
+`rm` 命令用于删除多余副本：
+
+```sh
+tsubaki sum sha256 ./photos | tsubaki dup
 ```
 
----
+`cmp` 接收两个列表文件并报告：
 
-### `cmp <fileA> <fileB> [options]`
+| 标记 | 含义 |
+| --- | --- |
+| `[!]` | Modified：路径相同但哈希不同 |
+| `[D]` | Moved/copied/renamed：哈希相同但路径不同 |
+| `[U][A]` / `[U][B]` | 仅 A 有（删除）/ 仅 B 有（新增） |
+| `[=]` | Matched：路径与哈希都相同 |
 
-比较两个校验和文件（每行格式：`<checksum> <path>`）。程序会逐行读取两个文件，并根据以下规则将文件分类：
-
-- **[!] 已修改** – 路径相同，校验和不同。
-- **[D] 已移动/复制/合并/重命名** – 校验和相同，路径不同（按校验和分组）。
-- **[U] 已删除或添加** – 仅出现在 A 或仅出现在 B 中的文件。
-- **[=] 匹配** – 路径和校验和均相同。
-
-输出打印到标准输出。
-**选项：** `--quiet` 禁止信息性消息。
-
----
-
-### `dup [options]`
-
-从标准输入读取一个列表，格式为 `<checksum> <path>`（无前缀）。识别重复文件（校验和相同）并打印重复组。还会为每组中除第一个文件外的所有文件建议删除命令（`rm`）。
-
-**选项：** `--quiet` 禁止信息性消息。
-
----
-
-### `help`
-
-显示简洁的帮助信息。
-
----
-
-## 示例
-
-### 1. 计算 `/home/user` 和 `/data` 下所有文件的 SHA256，排除缓存和配置目录
-
-```bash
-tsubaki sum sha256 /home/user /data --exclude=/home/user/{.cache,.config} > home_checksums.txt
-```
-
-### 2. 生成 `/photos` 中所有文件的纯路径列表（无校验和）
-
-```bash
-tsubaki sum none /photos --plain-list > photo_list.txt
-```
-
-### 3. 为 `filelist.txt` 中列出的每个路径计算 MD5
-
-```bash
-cat filelist.txt | tsubaki sum md5 stdin-plain-list > file_checksums.txt
-```
-
-### 4. 比较两个目录
-
-```bash
-tsubaki sum sha256 /dirA > A.txt
-tsubaki sum sha256 /dirB > B.txt
+```sh
 tsubaki cmp A.txt B.txt > comparison.txt
 ```
 
-### 5. 查找照片集中的重复文件
+### `sum` 的输入
 
-```bash
-tsubaki sum md5 /photos | tsubaki dup
+| 输入 | 说明 |
+| --- | --- |
+| `<路径>` | 普通文件，或将被递归扫描的目录 |
+| `stdin` | 从标准输入读取 tsubaki 格式的校验和列表 |
+| `stdin-plain-list` | 从标准输入读取纯路径列表，每行一个 |
+
+### 算法
+
+`md4`、`md5`、`sha1`、`sha224`、`sha256`、`sha384`、`sha512`、`sha512_224`、
+`sha512_256`、`sha3_224`、`sha3_256`、`sha3_384`、`sha3_512`、`shake128`、
+`shake256`、`blake2b512`、`blake2s256`。
+
+### 选项
+
+| 选项 | 说明 |
+| --- | --- |
+| `--exclude=PATH` | 排除以 `PATH` 开头的路径（可重复） |
+| `--min-size=SIZE` | 仅包含不小于 `SIZE` 的文件 |
+| `--max-size=SIZE` | 仅包含不大于 `SIZE` 的文件 |
+| `--force-scan` | 即使输入列表中已有哈希也重新计算 |
+| `--allow-symlinks` | 扫描时跟随目录符号链接 |
+| `--threads=N` | 工作线程数（默认：硬件并发数） |
+| `--test` | 仅扫描与统计，不计算校验和 |
+| `--progress` | 强制显示进度条 |
+| `--no-progress` | 强制关闭进度条 |
+| `--log-level=LEVEL` | `DEBUG`、`INFO`、`WARN` 或 `ERROR`（默认 `INFO`） |
+| `--quiet` | 已弃用，等价于 `--log-level=ERROR` |
+| `-v` | 已弃用，等价于 `--log-level=INFO` |
+| `-h`、`--help` | 显示英文总帮助 |
+| `--help-cn` | 显示中文总帮助 |
+
+`SIZE` 可带单位后缀：`b`、`k`、`m`、`g`、`t`、`p`（二进制，即 `1k` = 1024 字节）。
+
+### 输出
+
+每个已处理的文件在 stdout 输出一行：
+
+```text
+<哈希> <路径>
+<NONE> <路径>          # 该文件无法处理
 ```
 
-### 6. 恢复中断的计算
+末尾附带汇总报告：
 
-```bash
-# 第一次运行（中断）
-tsubaki sum sha256 /large_data > partial.txt
-# 稍后继续（partial.txt 包含已计算的条目）
+```text
+#
+# ----------General Report----------
+# Total: 3
+# Succeed: 3
+# Failed: 0
+# Unprocessed: 0
+# Time started: 2026-09-17 12:00:00
+# Time finished: 2026-09-17 12:00:01
+# Duration: 1.23s
+# Command: tsubaki sum sha256 ./data
+```
+
+若运行过程中按 `Ctrl+C`（`SIGINT`）中断，报告仍会输出，并额外增加一行：
+
+```text
+# Interrupted: yes
+```
+
+### 退出码
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 成功 |
+| `1` | 参数错误、算法不支持，或存在处理失败的文件 |
+| `130` | 被 `SIGINT`（`Ctrl+C`）中断 |
+
+## 示例
+
+```sh
+# 计算单个文件
+tsubaki sum sha256 ./archive.tar.gz
+
+# 递归计算目录，排除子目录并忽略过小的文件
+tsubaki sum sha256 ./data --exclude=./data/.cache --min-size=1k
+
+# 输出结果，并在中断后从部分结果续算
+tsubaki sum sha256 ./data > partial.txt
 cat partial.txt | tsubaki sum sha256 stdin > complete.txt
+
+# 从标准输入读取纯路径列表
+printf 'a.txt\nb.txt\n' | tsubaki sum sha256 stdin-plain-list
+
+# 只查看扫描/过滤结果，不计算哈希
+tsubaki sum sha256 ./data --test
+
+# 查找重复文件，以及比较两个校验和列表
+tsubaki sum sha256 ./photos | tsubaki dup
+tsubaki cmp before.txt after.txt
+
+# 中文帮助，或查看单个主题的详细信息
+tsubaki help-cn
+tsubaki help --exclude
 ```
 
-### 7. 使用 8 个线程和负载均衡进行多线程处理
+## 测试
 
-```bash
-tsubaki sum sha256 /large_dir --thd-amount=8 --balance > sums.txt
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
 ```
 
----
+测试基于 GoogleTest：优先通过 `find_package(GTest)` 查找，未安装时由 CMake
+自动下载。
 
-## 退出状态
+## 目录结构
 
-- **0** – 成功（所有文件均已处理，未发生错误）。
-- **1** – 无效命令、扫描文件或计算校验和时发生错误。
-  在 `sum` 模式下，如果有任何文件无法读取或其哈希无法计算，错误消息会附加到输出中，程序返回 `1`。
+```text
+core/
+  common/   日志级别配置、校验和列表解析、帮助文本
+  cmp/      `cmp` 命令：比较两个校验和列表
+  dup/      `dup` 命令：查找重复文件
+  sum/      `sum` 命令：扫描、过滤与哈希计算
+plugins/
+  arg_parser.*   命令行解析
+  encoder.*      OpenSSL 摘要查找与文件哈希
+  file_list.*    文件元数据容器
+  lock_free_queue.h  有界无锁 MPMC 队列（Vyukov）
+  logger.*       分级日志
+  thread_pool.*  用于哈希计算的线程池，基于无锁队列实现
+  trie.*         `--exclude` 使用的路径前缀匹配
+tests/      GoogleTest 测试套件
+```
 
----
+## 说明与限制
 
-## 注意事项
-
-- **目录扫描** - 扫描目录时只会识别目录里的普通文件和指向普通文件的符号链接。如果不想要这些符号链接的话，可以再加一层过滤条件 `--focus=/target_dir` （ `/target_dir` 是待校验目录）。
-- **权限拒绝** – 遍历目录时，遇到因权限不足无法访问的子目录会静默跳过，继续扫描其他部分。
-- **绝对路径** - 目前仅支持绝对路径，也就是说你需要使用绝对路径指定文件，程序也总是会输出绝对路径。
-- **符号链接** – 默认不跟随目录的符号链接。使用 `--allow-symlinks` 可跟随，但需注意循环链接的风险。
-- **多线程** – 启用时，文件列表会在线程间分配。默认分配方式是交错（轮询）以平衡负载；`--balance` 则先按文件大小排序再交错分配，使各线程处理的总数据量更均衡。
-- **信号处理** – 递归计算目录时，会捕获 `SIGINT`（ `Ctrl+C` ）。线程完成当前文件后退出，已计算的结果仍会写入。如果某个线程正在计算较大的文件，则可能需要等很久才会退出，请耐心等待或发送 `SIGKILL` 。
-- **内存使用** – 文件列表会先完全枚举在内存中，然后根据指定的筛选条件进行过滤。对于非常大的目录树（数百万个文件），这可能成为瓶颈 ，但一般硬件可以承担。
-- **系统支持** - 限于本人水平，仅支持Linux发行版。
-- **显示语言** - 由于本人的开发环境为英文，目前只有英文版的Tsubaki。如需中文版，可以自行翻译或请求我。
-
----
-
-## 源码结构
-
-本项目为单源代码文件，源码结构写在 `ARCHITECTURE.md`（英文）和 `ARCHITECTURE.zh-cn.md`（中文）中。
-
----
+- 仅对普通文件计算校验和；除非指定 `--allow-symlinks`，否则不跟随目录符号链接。
+- 无法访问的子目录会被跳过并给出警告。
+- 输出中的路径会被规范化为绝对路径。
+- `SIGINT`（`Ctrl+C`）会优雅地停止线程池；已完成的哈希仍会输出，汇总报告仍会打印
+  并附带 `# Interrupted: yes`，进程以退出码 `130` 结束，结果可用于续算。
+- 主线程等待单个文件的哈希最多 300ms；超时的文件会被暂存，待首轮遍历结束后再
+  回读，避免慢文件阻塞快文件的结果输出。
+- 进度条仅在 stderr 为终端、终端足够宽且日志级别不高于 `INFO` 时绘制；输出被
+  重定向、日志被静默或终端过窄（换行会破坏 `\r` 原地刷新）时自动禁用。
+- 文件列表在过滤前会完整载入内存，超大目录树会成为瓶颈。
 
 ## 许可证
 
-本项目采用 MIT 许可证 – 详见 `LICENSE` 文件。
+基于 MIT 许可证发布，详见 [LICENSE](LICENSE)。
 
----
+## 作者
 
-## 开发者
-
-- **昵称** - Lawrence Charland
+- **Lawrence Charland**

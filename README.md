@@ -1,257 +1,290 @@
-### 注意
-
-以下展示的是README的英文翻译版。若需阅读中文请移步至项目文件夹下的 `README.zh-cn.md` 。
-
-### Attention
-
-This README was translated by AI from the Chinese version. If there are any errors, please refer to the Chinese version or the source code.
-
----
-
-This is a personal practice project, and also the first project I created since I started programming. You are welcome to use it. If you find any issues, feel free to let me know.
-
-*Note: If you want to make any modifications to the repository, please inform me first.*
-
-Here is the tool introduction:
-
----
-
-
 # Tsubaki
 
-Tsubaki is a checksum utility for verifying file integrity, comparing directories, and detecting duplicate files. It supports multiple hash algorithms (MD5, SHA1, SHA256, SHA512) and provides flexible input sources—directories, file lists, or plain path lists—as well as single-file checksum calculation. Multi-threading and dynamic buffer sizing make it suitable for large datasets.
+A command-line checksum utility for file integrity verification, written in modern C++20.
+
+[中文文档](README.zh-cn.md)
 
 ## Features
 
-- **Sum Mode** – Recursively compute checksums for all files in a directory, supporting direct directory scanning or reading a file list from standard input for calculation.
-- **Deduplication Mode** – Identify duplicate files based on identical checksums, with a suggested deletion command.
-- **Comparison Mode** – Read and compare two checksum results, categorizing files as modified, moved/copied, added/deleted, or matched.
-- **Multi-threading Acceleration** – Automatically enabled for large tasks (directory calculation with total size > 1GB) to fully utilize hardware performance; configurable thread count and chunking strategy.
-- **Flexible Filtering** – Focus on or exclude subdirectories, filter by file size, and allow following symbolic links.
-- **Progress Reporting** – Verbose mode shows a progress bar or the currently processed file name.
-- **Dynamic Buffer** – Automatically adjusts buffer size based on file size to maximize efficiency.
-- **Graceful Interruption** – Press Ctrl+C to stop processing; already computed results are still written to stdout.
+- **Checksums** – Compute checksums for files and directories using any digest
+  supported by OpenSSL (MD4/MD5, SHA-1, SHA-2, SHA-3, SHAKE, BLAKE2).
+- **Recursive scanning** – Scan directories recursively, with optional symlink
+  following and permission-denied tolerance.
+- **Multiple inputs** – Accept regular files, directories, a tsubaki-format
+  checksum list on stdin, or a plain path list on stdin.
+- **Filtering** – Exclude path prefixes and filter by minimum/maximum file size.
+- **Multi-threading** – Hash files in parallel with a thread pool sized to the
+  hardware; tasks are dispatched through a lock-free queue, and read buffers
+  are sized dynamically per file.
+- **Resumable** – Already-computed hashes from the input list are reused unless
+  `--force-scan` is given, so an interrupted run can be resumed.
+- **Progress bar** – Shows live progress on stderr when it is a terminal,
+  including file counts and processed bytes.
+- **Clean output** – Results go to stdout, logs to stderr, with a summary report
+  appended at the end.
 
-## Build Requirements
+## Requirements
 
-Tsubaki requires a C++17 compiler, OpenSSL development libraries, and pthreads (on Unix-like systems).
+- A C++20 compiler (GCC 13+, Clang 16+, Apple Clang 15+, or MSVC 19.29+)
+- CMake 3.16+
+- OpenSSL development files
+- Linux, macOS, or Windows
 
-### Dependencies
+## Build
 
-- A computer with a Linux distribution installed
-- C++17 standard library
-- OpenSSL (libcrypto)
-- POSIX threads
-- `filesystem` (part of C++17; on older compilers you may need `-lstdc++fs`)
-
-### Compilation
-
-```bash
-g++ -std=c++17 -O3 -o tsubaki main.cpp -lssl -lcrypto -lpthread # You can add other parameters or change the compiler
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 ```
 
-On some systems, you might need to add `-lstdc++fs`. If your compiler fully supports C++17 with integrated `std::filesystem`, no extra library is needed.
+The executable is produced at `build/tsubaki`.
 
-You can also directly run the `build` script in the project folder (requires root privileges).
+### OpenSSL on Windows
 
-#### Note
+OpenSSL is not bundled and must be installed first. Pick one of the options
+below, then configure the project with CMake.
 
-It is recommended to check the SHA256 checksum of each file (at least the **source code**) before compilation, and compare it with the content of `Checksum.sha256.txt` in the project folder.
+**Option 1 – vcpkg (recommended)**
+
+```sh
+git clone https://github.com/microsoft/vcpkg.git
+.\vcpkg\bootstrap-vcpkg.bat
+.\vcpkg\vcpkg install openssl:x64-windows
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+```
+
+**Option 2 – prebuilt installer**
+
+Install a Win64 OpenSSL 3.x package (for example from
+<https://slproweb.com/products/Win32OpenSSL.html>), then point CMake at it:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64"
+cmake --build build --config Release
+```
+
+**Option 3 – Chocolatey**
+
+```sh
+choco install openssl
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DOPENSSL_ROOT_DIR="C:/Program Files/OpenSSL-Win64"
+cmake --build build --config Release
+```
+
+At runtime `libcrypto-3-x64.dll` must be reachable: add the OpenSSL `bin`
+directory to `PATH`, or copy the DLL next to `tsubaki.exe`.
+
+### Options
+
+| CMake option | Default | Description |
+| --- | --- | --- |
+| `CMAKE_BUILD_TYPE` | – | `Release` is recommended for hashing performance |
+| `BUILD_TESTING` | `ON` | Build the test suite (requires GoogleTest) |
+| `TSUBAKI_SANITIZE` | `OFF` | Build with AddressSanitizer and UBSan |
 
 ## Usage
 
-```
-tsubaki <command> [options]
-```
-
-Commands: `sum`, `cmp`, `dup`, `help`
-
-### Global Options
-
-- `--quiet` – Suppress informational messages (errors are still printed to stderr).
-
----
-
-## Command Syntax
-
-### `sum <type> [paths] [options]`
-
-Compute checksums for files.
-
-**`<type>`** – Supported values: `md5`, `sha1`, `sha256`, `sha512`, `none`.
-When using `none`, no checksum is computed; output is a list of paths (optionally with a `<NONE>` placeholder). Use `--plain-list` to output only paths.
-
-**`[paths]`** can be:
-- **Regular file** – Print its checksum (or `<NONE>`) and exit.
-- **Directory** – Recursively scan all regular files in the directory, compute checksums, and output `<checksum> <relative-path>` for each file. Multiple directories can be specified **(see “Tips” section)**.
-- **`"stdin"`** – Read an existing list in the format `<checksum> <path>` (lines starting with `#` are ignored). Existing checksums are retained (unless `--force-rescan` is used) to avoid recomputation.
-- **`"stdin-plain-list"`** – Read plain file paths (one per line) and compute checksums for them.
-
-#### Options for `sum`
-
-| Option | Description |
-|--------|-------------|
-| `--exclude=<dir>` | Exclude files under the specified directory. Multiple occurrences are combined (union). |
-| `--focus=<dir>`   | Only include files under the specified directory. Multiple occurrences are combined (union); applied after exclusions. |
-| `--max-size=<size>` | Skip files larger than `<size>`. Examples: `10M`, `2G`, `1.5K`. Suffixes: `K`=KiB, `M`=MiB, `G`=GiB, `T`=TiB. |
-| `--min-size=<size>` | Skip files smaller than `<size>`. |
-| `--allow-symlinks` | Follow symbolic links (use with caution; may cause infinite loops). |
-| `--test`          | Do not compute checksums—only evaluate file filtering rules, buffer strategy, thread allocation, and report the total number and size of files. |
-| `--plain-list`    | When `<type>` is `none`, output only file paths (one per line), without the `<NONE>` placeholder. |
-| `--thd-amount=<N>` | Set the number of threads. If not specified or the value is invalid, use hardware concurrency (if total size > 1G) or 1. |
-| `--balance`       | In multi-threaded mode, sort files by size before interleaving allocation, so that each thread handles a more balanced total data size (helps save time). |
-| `--force-rescan`  | Recompute checksums even if they already exist in the input list (used with `path="stdin"`). |
-| `--buffer-size=<size>` | Use a static buffer of exactly `<size>` bytes. Default is dynamic buffer (2KB ~ 64KB). |
-| `--max-buffer-size=<size>` | When using dynamic buffer, set an upper bound. Ignored if `--buffer-size` is set. |
-| `-v` | Increase verbosity, showing the file being processed and the total number of processed files. |
-
-#### Output
-
-For multiple files, each line outputs `<checksum> <path>` (or just `<path>` if `--plain-list` is used). After the file list, a summary block is appended:
-
-```
-#
-#----------General Report----------
-#Total:          1234
-#Succeed:        1230
-#Failed:         2
-#Kept:           2
-#Unprocessed:    0
-#Time Finished:  2025-03-15-10-30-45
-#Duration:       12.34 secs
-#Command:        tsubaki sum sha256 /home/user ...
-#Error messages:
-#Error: Cannot open file: /home/user/secret1.txt
-#Error: Cannot open file: /home/user/secret2.txt
+```text
+tsubaki <command> [options] [paths...]
 ```
 
-If errors occur while loading the file list, they appear immediately on the console; if errors occur during checksum calculation, they are listed at the end of stdout, and the program exits with status `1`.
+### Commands
 
-#### Tips
+| Command | Description |
+| --- | --- |
+| `sum <algorithm> <path...>` | Compute checksums for files and directories |
+| `cmp <fileA> <fileB>` | Compare two checksum lists and report differences |
+| `dup` | Find duplicate files from a checksum list on stdin |
+| `help [key]` | Show help in English; with `key`, show that topic's details |
+| `help-cn [key]` | Same as `help` but in Chinese |
 
-- Press **Ctrl+C** to gracefully stop the calculation. Already processed results are still written to stdout. You can resume later by feeding the partial output back in, enabling **resume from breakpoint**: `cat half.txt | tsubaki sum <type> stdin`.
-- Combining `--plain-list` with `none` generates a simple file list.
-- For recursive directory scanning, the order of arguments after `tsubaki sum <type> <dir1>` is not sensitive. This means you can write:
+`key` may be a command, input, option, or algorithm, for example
+`tsubaki help sum`, `tsubaki help --exclude`, or `tsubaki help-cn stdin`.
 
-```bash
-tsubaki sum md5 /home/user -v --balance --exclude=/home/user/{.cache,.config} /data # Note: <type> must be immediately followed by the first directory to scan, so the program can recognize the scanning strategy.
+### Comparing and de-duplicating
+
+Both `cmp` and `dup` consume tsubaki-format checksum lists (one `<hash> <path>`
+entry per line), such as the output of `sum`.
+
+`dup` reads the list from stdin, groups entries that share a checksum, prints
+each group, and ends with a suggested `rm` command for the extra copies:
+
+```sh
+tsubaki sum sha256 ./photos | tsubaki dup
 ```
 
----
+`cmp` takes two list files and reports:
 
-### `cmp <fileA> <fileB> [options]`
+| Tag | Meaning |
+| --- | --- |
+| `[!]` | Modified: same path, different checksum |
+| `[D]` | Moved/copied/renamed: same checksum under different paths |
+| `[U][A]` / `[U][B]` | Deleted (only in A) / added (only in B) |
+| `[=]` | Matched: same path and checksum |
 
-Compare two checksum files (each line format: `<checksum> <path>`). The program reads both files line by line and categorizes files as follows:
-
-- **[!] Modified** – Same path, different checksum.
-- **[D] Moved/Copied/Merged/Renamed** – Same checksum, different paths (grouped by checksum).
-- **[U] Deleted or Added** – Files present only in A or only in B.
-- **[=] Matched** – Same path and same checksum.
-
-Output is printed to stdout.
-**Options:** `--quiet` suppresses informational messages.
-
----
-
-### `dup [options]`
-
-Read a list from standard input in the format `<checksum> <path>` (no prefix). Identify duplicate files (same checksum) and print duplicate groups. Also suggests a deletion command (`rm`) for all files except the first in each group.
-
-**Options:** `--quiet` suppresses informational messages.
-
----
-
-### `help`
-
-Display concise help information.
-
----
-
-## Examples
-
-### 1. Compute SHA256 for all files under `/home/user` and `/data`, excluding cache and config directories
-
-```bash
-tsubaki sum sha256 /home/user /data --exclude=/home/user/{.cache,.config} > home_checksums.txt
-```
-
-### 2. Generate a plain path list (no checksums) for all files under `/photos`
-
-```bash
-tsubaki sum none /photos --plain-list > photo_list.txt
-```
-
-### 3. Compute MD5 for each path listed in `filelist.txt`
-
-```bash
-cat filelist.txt | tsubaki sum md5 stdin-plain-list > file_checksums.txt
-```
-
-### 4. Compare two directories
-
-```bash
-tsubaki sum sha256 /dirA > A.txt
-tsubaki sum sha256 /dirB > B.txt
+```sh
 tsubaki cmp A.txt B.txt > comparison.txt
 ```
 
-### 5. Find duplicate files in a photo collection
+### Inputs for `sum`
 
-```bash
-tsubaki sum md5 /photos | tsubaki dup
+| Input | Description |
+| --- | --- |
+| `<path>` | A regular file, or a directory scanned recursively |
+| `stdin` | Read a tsubaki-format checksum list from stdin |
+| `stdin-plain-list` | Read a plain list of paths from stdin, one per line |
+
+### Algorithms
+
+`md4`, `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`, `sha512_224`,
+`sha512_256`, `sha3_224`, `sha3_256`, `sha3_384`, `sha3_512`, `shake128`,
+`shake256`, `blake2b512`, `blake2s256`.
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `--exclude=PATH` | Exclude paths beginning with `PATH` (repeatable) |
+| `--min-size=SIZE` | Only include files not smaller than `SIZE` |
+| `--max-size=SIZE` | Only include files not larger than `SIZE` |
+| `--force-scan` | Recompute hashes even if present in the input list |
+| `--allow-symlinks` | Follow directory symlinks while scanning |
+| `--threads=N` | Number of worker threads (default: hardware concurrency) |
+| `--test` | Scan and report only; do not compute checksums |
+| `--progress` | Force the progress bar on |
+| `--no-progress` | Force the progress bar off |
+| `--log-level=LEVEL` | `DEBUG`, `INFO`, `WARN`, or `ERROR` (default `INFO`) |
+| `--quiet` | Deprecated. Same as `--log-level=ERROR` |
+| `-v` | Deprecated. Same as `--log-level=INFO` |
+| `-h`, `--help` | Show the general help in English |
+| `--help-cn` | Show the general help in Chinese |
+
+`SIZE` accepts an optional unit suffix: `b`, `k`, `m`, `g`, `t`, `p`
+(binary, so `1k` = 1024 bytes).
+
+### Output
+
+Each processed file produces one line on stdout:
+
+```text
+<hash> <path>
+<NONE> <path>          # the file could not be processed
 ```
 
-### 6. Resume an interrupted calculation
+A summary report is appended at the end:
 
-```bash
-# First run (interrupted)
-tsubaki sum sha256 /large_data > partial.txt
-# Resume later (partial.txt contains already computed entries)
+```text
+#
+# ----------General Report----------
+# Total: 3
+# Succeed: 3
+# Failed: 0
+# Unprocessed: 0
+# Time started: 2026-09-17 12:00:00
+# Time finished: 2026-09-17 12:00:01
+# Duration: 1.23s
+# Command: tsubaki sum sha256 ./data
+```
+
+If the run is interrupted with `Ctrl+C` (`SIGINT`), the report is still printed
+and an extra line is added:
+
+```text
+# Interrupted: yes
+```
+
+### Exit status
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | Invalid arguments, unsupported algorithm, or one or more failed files |
+| `130` | Interrupted by `SIGINT` (`Ctrl+C`) |
+
+## Examples
+
+```sh
+# Checksum a single file
+tsubaki sum sha256 ./archive.tar.gz
+
+# Recursively checksum a directory, skipping a subdirectory and tiny files
+tsubaki sum sha256 ./data --exclude=./data/.cache --min-size=1k
+
+# Write results, then resume an interrupted run from the partial output
+tsubaki sum sha256 ./data > partial.txt
 cat partial.txt | tsubaki sum sha256 stdin > complete.txt
+
+# Read a plain path list from stdin
+printf 'a.txt\nb.txt\n' | tsubaki sum sha256 stdin-plain-list
+
+# Inspect the scan/filter pipeline without hashing
+tsubaki sum sha256 ./data --test
+
+# Find duplicates, then compare two checksum lists
+tsubaki sum sha256 ./photos | tsubaki dup
+tsubaki cmp before.txt after.txt
+
+# Chinese help, or details about a single topic
+tsubaki help-cn
+tsubaki help --exclude
 ```
 
-### 7. Multi-threaded processing with 8 threads and load balancing
+## Testing
 
-```bash
-tsubaki sum sha256 /large_dir --thd-amount=8 --balance > sums.txt
+```sh
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
 ```
 
----
+The suite uses GoogleTest, located via `find_package(GTest)` or fetched
+automatically by CMake if it is not installed.
 
-## Exit Status
+## Project layout
 
-- **0** – Success (all files processed, no errors).
-- **1** – Invalid command, error while scanning files, or error while computing checksums.
-  In `sum` mode, if any file cannot be read or its hash cannot be computed, error messages are appended to the output, and the program returns `1`.
+```text
+core/
+  common/   Argument-driven logging setup, checksum-list parsing, help text
+  cmp/      `cmp` command: compare two checksum lists
+  dup/      `dup` command: find duplicate files
+  sum/      `sum` command: scanning, filtering and hash computation
+plugins/
+  arg_parser.*   Command-line parsing
+  encoder.*      OpenSSL digest lookup and file hashing
+  file_list.*    File metadata container
+  lock_free_queue.h  Bounded lock-free MPMC queue (Vyukov)
+  logger.*       Leveled logger
+  thread_pool.*  Worker pool used for hashing, backed by the lock-free queue
+  trie.*         Path-prefix matcher used by --exclude
+tests/      GoogleTest suite
+```
 
----
+## Notes and limitations
 
-## Notes
-
-- **Directory Scanning** – When scanning a directory, only regular files and symbolic links pointing to regular files are recognized. If you want to exclude such symlinks, you can add a filter like `--focus=/target_dir` (where `/target_dir` is the directory to verify).
-- **Permission Denied** – While traversing directories, subdirectories that cannot be accessed due to insufficient permissions are silently skipped; scanning continues elsewhere.
-- **Absolute Paths** – Currently, only absolute paths are supported. You must specify files using absolute paths, and the program will always output absolute paths.
-- **Symbolic Links** – Directory symlinks are not followed by default. Use `--allow-symlinks` to follow them, but beware of cyclic links.
-- **Multi-threading** – When enabled, the file list is distributed among threads. The default allocation is interleaved (round-robin) to balance load; `--balance` sorts files by size before interleaving, making the total data size handled by each thread more balanced.
-- **Signal Handling** – When recursively calculating a directory, `SIGINT` (Ctrl+C) is caught. Threads exit after finishing the current file; already computed results are still written. If a thread is processing a very large file, it may take a while to exit; please be patient or send `SIGKILL`.
-- **Memory Usage** – The file list is fully enumerated in memory first, then filtered according to the specified criteria. For very large directory trees (millions of files), this could become a bottleneck, but typical hardware can handle it.
-- **System Support** – Due to the author's limited expertise, only Linux distributions are supported.
-- **Display Language** – Since the author's development environment is in English, only the English version of Tsubaki is available. If you need a Chinese version, you can translate it yourself or request it.
-
----
-
-## Source Code Structure
-
-This project is a single source file. The source code structure is described in `ARCHITECTURE.md` (English) and `ARCHITECTURE.zh-cn.md` (Simplified Chinese).
-
----
+- Only regular files are checksummed; directory symlinks are not followed unless
+  `--allow-symlinks` is set.
+- Subdirectories that cannot be accessed are skipped with a warning.
+- Paths are normalized to absolute paths in the output.
+- `SIGINT` (`Ctrl+C`) stops the worker pool gracefully. Files already hashed are
+  still printed, the summary report is still emitted with `# Interrupted: yes`,
+  and the process exits with code `130`; the output is suitable for resuming.
+- The main thread waits at most 300 ms for each file's hash; files that take
+  longer are deferred to a second pass after the first traversal, so slow files
+  do not block the results of faster ones.
+- The progress bar is drawn on stderr only when stderr is a terminal wide enough
+  to fit the whole line and the log level is `INFO` or lower; it is disabled
+  automatically when output is redirected, logging is quieted, or the terminal is
+  too narrow (wrapping would break the in-place `\r` refresh).
+- The file list is fully enumerated in memory before filtering, which is a
+  bottleneck for very large trees.
 
 ## License
 
-This project is licensed under the MIT License – see the `LICENSE` file for details.
+Released under the MIT License. See [LICENSE](LICENSE) for details.
 
----
+## Author
 
-## Developer
-
-- **Nickname** - Lawrence Charland
+- **Lawrence Charland**

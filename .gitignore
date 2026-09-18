@@ -1,2 +1,10 @@
-Tsubaki.Qt_creator.d/build
-Tsubaki.Qt_creator.d/.qtcreator
+# Build directories
+build/
+compile_commands.json
+
+# Editor and OS files
+.clangd*
+.DS_Store
+
+# Generated output
+Checksum.sha256.txt
